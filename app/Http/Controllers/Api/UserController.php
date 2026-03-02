@@ -549,6 +549,11 @@ class UserController extends Controller
                 // الكاتيجري
                 'category' => $catSlug,
                 'category_name' => $catName,
+                
+                // Unified category image fields
+                'is_global_image_active' => $cat->is_global_image_active ?? false,
+                'global_image_url' => $cat->global_image_url,
+                'global_image_full_url' => $cat->global_image_full_url,
             ];
 
             // ✅ لو الكاتيجوري ده بيدعم make/model

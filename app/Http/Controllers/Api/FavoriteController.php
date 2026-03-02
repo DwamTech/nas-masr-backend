@@ -25,6 +25,7 @@ class FavoriteController extends Controller
             if (!$ad) return null;
 
             $slug = $ad->category_id ? Section::fromId($ad->category_id)->slug : null;
+            $sec = $ad->category_id ? Section::fromId($ad->category_id) : null;
 
             return [
                 'plan_type'  => $ad->plan_type,
@@ -40,6 +41,11 @@ class FavoriteController extends Controller
                 'rank'       => $ad->rank,
                 'categry'    => $slug,
                 'categry_name'=> $slug ? Section::fromId($ad->category_id)->name : null,
+                
+                // Unified category image fields
+                'is_global_image_active' => $sec ? ($sec->is_global_image_active ?? false) : false,
+                'global_image_url' => $sec ? $sec->global_image_url : null,
+                'global_image_full_url' => $sec ? $sec->global_image_full_url : null,
             ];
         })->filter();
 

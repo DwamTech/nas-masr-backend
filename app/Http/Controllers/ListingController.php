@@ -204,6 +204,11 @@ class ListingController extends Controller
                 // الكاتيجري
                 'category' => $categorySlug,   // slug
                 'category_name' => $categoryName,   // الاسم
+                
+                // Unified category image fields
+                'is_global_image_active' => $sec->is_global_image_active ?? false,
+                'global_image_url' => $sec->global_image_url,
+                'global_image_full_url' => $sec->global_image_full_url,
             ];
 
             if ($supportsMakeModel) {
