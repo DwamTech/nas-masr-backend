@@ -17,12 +17,15 @@ class Category extends Model
         'default_image',
         'sort_order',
         'is_active',
+        'is_global_image_active',
+        'global_image_url',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'is_global_image_active' => 'boolean',
     ];
-    protected $appends = ['icon_url', 'default_image_url'];
+    protected $appends = ['icon_url', 'default_image_url', 'global_image_full_url'];
 
     public function getIconUrlAttribute(): ?string
     {
@@ -40,6 +43,15 @@ class Category extends Model
         }
 
         return asset('storage/uploads/categories/' . $this->default_image);
+    }
+
+    public function getGlobalImageFullUrlAttribute(): ?string
+    {
+        if (!$this->global_image_url) {
+            return null;
+        }
+        
+        return asset('storage/' . $this->global_image_url);
     }
     public function listings()
     {

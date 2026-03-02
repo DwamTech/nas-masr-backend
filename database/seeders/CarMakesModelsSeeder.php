@@ -9,14 +9,24 @@ class CarMakesModelsSeeder extends Seeder
 {
     public function run(): void
     {
-        // لو عندك علاقات Foreign Keys بين models و makes
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        // Database-agnostic foreign key handling
+        $driver = DB::getDriverName();
+        
+        if ($driver === 'mysql') {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        } elseif ($driver === 'sqlite') {
+            DB::statement('PRAGMA foreign_keys = OFF;');
+        }
 
         // امسح القديم
         DB::table('models')->truncate();
         DB::table('makes')->truncate();
 
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        if ($driver === 'mysql') {
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        } elseif ($driver === 'sqlite') {
+            DB::statement('PRAGMA foreign_keys = ON;');
+        }
 
         $makes = [
             'هيونداي'   => ['إلنترا', 'أكسنت', 'توسان', 'سوناتا'],

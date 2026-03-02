@@ -139,6 +139,12 @@ Route::prefix('admin')
         Route::get('categories', [categoryController::class, 'index']);
         Route::get('categories/{category}', [categoryController::class, 'show']);
         
+        // Category Unified Image Routes
+        Route::put('categories/{category}/toggle-global-image', [categoryController::class, 'toggleGlobalImage']);
+        Route::post('categories/{category}/upload-global-image', [categoryController::class, 'uploadGlobalImage'])
+            ->middleware('throttle:10,1'); // Rate limit: 10 uploads per minute
+        Route::delete('categories/{category}/global-image', [categoryController::class, 'deleteGlobalImage']);
+        
         // Category Option Ranks Route
         Route::post('categories/{slug}/options/ranks', [CategoryController::class, 'updateOptionRanks']);
 
