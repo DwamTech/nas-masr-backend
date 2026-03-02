@@ -172,9 +172,12 @@ class ListingController extends Controller
 
         $categorySlug = $sec->slug;
         $categoryName = $sec->name;
+        
+        // Get category model for unified image fields
+        $category = \App\Models\Category::where('slug', $categorySlug)->first();
 
 
-        $items = $rows->map(function ($item) use ($supportsMakeModel, $supportsSections, $categorySlug, $categoryName, $sec) {
+        $items = $rows->map(function ($item) use ($supportsMakeModel, $supportsSections, $categorySlug, $categoryName, $category) {
             $attrs = [];
             if ($item->relationLoaded('attributes')) {
                 foreach ($item->attributes as $row) {
@@ -206,9 +209,9 @@ class ListingController extends Controller
                 'category_name' => $categoryName,   // الاسم
                 
                 // Unified category image fields
-                'is_global_image_active' => $sec->is_global_image_active ?? false,
-                'global_image_url' => $sec->global_image_url,
-                'global_image_full_url' => $sec->global_image_full_url,
+                'is_global_image_active' => $category->is_global_image_active ?? false,
+                'global_image_url' => $category->global_image_url,
+                'global_image_full_url' => $category->global_image_full_url,
             ];
 
             if ($supportsMakeModel) {
