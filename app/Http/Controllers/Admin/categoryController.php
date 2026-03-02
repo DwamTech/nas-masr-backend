@@ -484,28 +484,7 @@ class categoryController extends Controller
             $path = "uploads/categories/global/{$filename}";
             $fullPath = storage_path('app/public/' . $path);
 
-            // Security: Verify path is within allowed directory (additional path traversal check)
-            $realPath = realpath(dirname($fullPath));
-            $allowedBase = realpath(storage_path('app/public/uploads/categories/global'));
-            
-            if ($realPath === false || $allowedBase === false || strpos($realPath, $allowedBase) !== 0) {
-                Log::error('Path traversal attempt detected in storage path', [
-                    'category_id' => $category->id,
-                    'path' => $path,
-                    'full_path' => $fullPath,
-                    'user_id' => auth()->id(),
-                    'ip' => $request->ip(),
-                ]);
-
-                imagedestroy($sourceImage);
-                imagedestroy($resizedImage);
-
-                return response()->json([
-                    'error' => 'مسار التخزين غير صالح',
-                ], 500);
-            }
-
-            // Create directory if it doesn't exist
+            // Create directory if it doesn't exist (before path validation)
             $directory = dirname($fullPath);
             if (!file_exists($directory)) {
                 if (!mkdir($directory, 0755, true)) {
@@ -522,6 +501,30 @@ class categoryController extends Controller
                         'error' => 'فشل إنشاء مجلد التخزين',
                     ], 500);
                 }
+            }
+
+            // Security: Verify path is within allowed directory (additional path traversal check)
+            // Now that directory exists, realpath will work correctly
+            $realPath = realpath(dirname($fullPath));
+            $allowedBase = realpath(storage_path('app/public/uploads/categories/global'));
+            
+            if ($realPath === false || $allowedBase === false || strpos($realPath, $allowedBase) !== 0) {
+                Log::error('Path traversal attempt detected in storage path', [
+                    'category_id' => $category->id,
+                    'path' => $path,
+                    'full_path' => $fullPath,
+                    'real_path' => $realPath,
+                    'allowed_base' => $allowedBase,
+                    'user_id' => auth()->id(),
+                    'ip' => $request->ip(),
+                ]);
+
+                imagedestroy($sourceImage);
+                imagedestroy($resizedImage);
+
+                return response()->json([
+                    'error' => 'مسار التخزين غير صالح',
+                ], 500);
             }
 
             // Save as WebP
