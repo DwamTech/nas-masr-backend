@@ -517,6 +517,9 @@ class UserController extends Controller
                     $supportsSections = $sec->supportsSections(); // ✅ الدالة اللي اتفقنا عليها
                 }
             }
+            
+            // Get category model for unified image fields
+            $cat = $row->category_id ? \App\Models\Category::find($row->category_id) : null;
 
             // ✅ لو القسم ده بيدعم رئيسي/فرعي، نرجّعهم بالاسم
             if ($supportsSections) {
