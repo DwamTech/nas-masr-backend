@@ -554,9 +554,9 @@ class UserController extends Controller
                 'category_name' => $catName,
                 
                 // Unified category image fields
-                'is_global_image_active' => $cat->is_global_image_active ?? false,
-                'global_image_url' => $cat->global_image_url,
-                'global_image_full_url' => $cat->global_image_full_url,
+                'is_global_image_active' => $cat ? ($cat->is_global_image_active ?? false) : false,
+                'global_image_url' => $cat ? $cat->global_image_url : null,
+                'global_image_full_url' => $cat ? $cat->global_image_full_url : null,
             ];
 
             // ✅ لو الكاتيجوري ده بيدعم make/model

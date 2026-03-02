@@ -209,9 +209,9 @@ class ListingController extends Controller
                 'category_name' => $categoryName,   // الاسم
                 
                 // Unified category image fields
-                'is_global_image_active' => $category->is_global_image_active ?? false,
-                'global_image_url' => $category->global_image_url,
-                'global_image_full_url' => $category->global_image_full_url,
+                'is_global_image_active' => $category ? ($category->is_global_image_active ?? false) : false,
+                'global_image_url' => $category ? $category->global_image_url : null,
+                'global_image_full_url' => $category ? $category->global_image_full_url : null,
             ];
 
             if ($supportsMakeModel) {
