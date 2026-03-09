@@ -20,7 +20,7 @@ class MakeController extends Controller
         $items = Make::with(['models' => function ($query) {
             // Sort models by rank (from category_field_option_ranks table)
             $query->leftJoin('category_field_option_ranks', function ($join) {
-                $join->on('car_models.name', '=', 'category_field_option_ranks.option_value')
+                $join->on('models.name', '=', 'category_field_option_ranks.option_value')
                      ->where('category_field_option_ranks.field_name', '=', 'model')
                      ->whereExists(function ($query) {
                          $query->select(\DB::raw(1))
@@ -29,7 +29,7 @@ class MakeController extends Controller
                                ->where('categories.slug', 'cars');
                      });
             })
-            ->select('car_models.*')
+            ->select('models.*')
             ->orderByRaw('COALESCE(category_field_option_ranks.rank, 999999) ASC');
         }])
         // Sort makes by rank
