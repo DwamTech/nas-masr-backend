@@ -276,6 +276,9 @@ class CategorySectionsController extends Controller
 
         $subSection->delete();
 
+        return response()->json("Deleted successfully", 204);
+    }
+
     // POST /api/admin/category-sections/main/ranks
     public function updateMainRanks(Request $request)
     {
