@@ -222,6 +222,8 @@ Route::prefix('admin')
         Route::delete('/main-section/{mainSection}', [CategorySectionsController::class, 'destroyMain']);
         Route::delete('/sub-section/{subSection}', [CategorySectionsController::class, 'destroySub']);
 
+        Route::post('/category-sections/main/ranks', [CategorySectionsController::class, 'updateMainRanks']);
+        Route::post('/category-sections/sub/ranks', [CategorySectionsController::class, 'updateSubRanks']);
 
         Route::get('category-plan-prices', [CategoryPlanPricesController::class, 'index']);
         Route::post('category-plan-prices', [CategoryPlanPricesController::class, 'store']);

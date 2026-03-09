@@ -276,6 +276,35 @@ class CategorySectionsController extends Controller
 
         $subSection->delete();
 
-        return response()->json("Deleted successfully", 204);
+    // POST /api/admin/category-sections/main/ranks
+    public function updateMainRanks(Request $request)
+    {
+        $data = $request->validate([
+            'ranks' => 'required|array',
+            'ranks.*.id' => 'required|integer|exists:category_main_sections,id',
+            'ranks.*.rank' => 'required|integer|min:0',
+        ]);
+
+        foreach ($data['ranks'] as $item) {
+            CategoryMainSection::where('id', $item['id'])->update(['sort_order' => $item['rank']]);
+        }
+
+        return response()->json(['message' => 'Ranks updated successfully']);
+    }
+
+    // POST /api/admin/category-sections/sub/ranks
+    public function updateSubRanks(Request $request)
+    {
+        $data = $request->validate([
+            'ranks' => 'required|array',
+            'ranks.*.id' => 'required|integer|exists:category_sub_section,id',
+            'ranks.*.rank' => 'required|integer|min:0',
+        ]);
+
+        foreach ($data['ranks'] as $item) {
+            CategorySubSection::where('id', $item['id'])->update(['sort_order' => $item['rank']]);
+        }
+
+        return response()->json(['message' => 'Ranks updated successfully']);
     }
 }
