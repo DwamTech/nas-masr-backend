@@ -114,7 +114,7 @@ class BannerController extends Controller
         }
 
         $request->validate([
-            'image' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:4096'
+            'image' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:40096'
         ]);
 
         $file = $request->file('image');
