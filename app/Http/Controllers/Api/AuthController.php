@@ -117,4 +117,46 @@ class AuthController extends Controller
             'message' => 'مرحبًا ' . $user->name . '، تم تغيير كلمة السر الخاصة بحسابك إلى: 123456. يرجى تسجيل الدخول وتغييرها بعد أول دخول. فريق ناس مصر',
         ]);
     }
+
+    // admin change own password using current password
+    public function changeOwnPassword(Request $request)
+    {
+        $data = $request->validate([
+            'current_password' => ['required', 'string'],
+            'new_password' => ['required', 'string', 'min:6', 'confirmed'],
+        ]);
+
+        $admin = $request->user();
+
+        if (!$admin || strtolower((string) $admin->role) !== 'admin') {
+            return response()->json([
+                'message' => 'غير مصرح لك بتنفيذ هذا الإجراء',
+            ], 403);
+        }
+
+        if (!Hash::check($data['current_password'], $admin->password)) {
+            return response()->json([
+                'message' => 'كلمة المرور الحالية غير صحيحة',
+                'errors' => [
+                    'current_password' => ['كلمة المرور الحالية غير صحيحة'],
+                ],
+            ], 422);
+        }
+
+        if (Hash::check($data['new_password'], $admin->password)) {
+            return response()->json([
+                'message' => 'كلمة المرور الجديدة يجب أن تختلف عن الحالية',
+                'errors' => [
+                    'new_password' => ['كلمة المرور الجديدة يجب أن تختلف عن الحالية'],
+                ],
+            ], 422);
+        }
+
+        $admin->password = Hash::make($data['new_password']);
+        $admin->save();
+
+        return response()->json([
+            'message' => 'تم تغيير كلمة المرور بنجاح',
+        ]);
+    }
 }
