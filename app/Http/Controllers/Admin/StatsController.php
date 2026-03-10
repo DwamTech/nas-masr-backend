@@ -328,6 +328,8 @@ class StatsController extends Controller
                 'plan_type' => $l->plan_type,
                 'price' => (float) ($l->price ?? 0),
                 'views' => (int) ($l->views ?? 0),
+                'whatsapp_clicks' => (int) ($l->whatsapp_clicks ?? 0),
+                'call_clicks' => (int) ($l->call_clicks ?? 0),
                 'advertiser_id' => (int) $l->user_id,
                 'advertiser_phone' => $l->relationLoaded('user') && $l->user ? $l->user->phone : null,
             ];
