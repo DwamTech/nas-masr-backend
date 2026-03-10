@@ -21,6 +21,9 @@ class SubscriptionController extends Controller
         $slug = $request->query('category_slug') ?? $request->query('slug');
         $sec = Section::fromSlug($slug);
         $row = CategoryPlanPrice::where('category_id', $sec->id())->first();
+        $packageSelectionAdsCount = Cache::remember('settings:package_selection_ads_count', now()->addHours(6), function () {
+            return (int) (SystemSetting::where('key', 'package_selection_ads_count')->value('value') ?? 0);
+        });
         return response()->json([
             'category_id' => $sec->id(),
             'category_slug' => $sec->slug,
@@ -30,6 +33,7 @@ class SubscriptionController extends Controller
             'price_standard' => (float) ($row->price_standard ?? 0),
             'standard_ad_price' => (float) ($row->standard_ad_price ?? 0),
             'standard_days' => (int) ($row->standard_days ?? 0),
+            'package_selection_ads_count' => $packageSelectionAdsCount,
         ]);
     }
 

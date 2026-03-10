@@ -26,6 +26,7 @@ class SystemSettingController extends Controller
         'free_ads_count',
         'free_ads_max_price',
         'free_ad_days_validity',
+        'package_selection_ads_count',
         'featured_user_max_ads',
         'jobs_default_image',
         'doctors_default_image',
@@ -36,7 +37,7 @@ class SystemSettingController extends Controller
 
     // مفاتيح حسب النوع
     protected array $booleanKeys = ['show_phone','manual_approval','enable_global_external_notif'];
-    protected array $integerKeys = ['featured_users_count','free_ads_count','free_ads_max_price','featured_user_max_ads', 'free_ad_days_validity'];
+    protected array $integerKeys = ['featured_users_count','free_ads_count','free_ads_max_price','featured_user_max_ads', 'free_ad_days_validity', 'package_selection_ads_count'];
 
     protected function rules(): array
     {
@@ -58,6 +59,7 @@ class SystemSettingController extends Controller
             'free_ads_count'        => ['nullable', 'integer', 'min:0'],
             'free_ads_max_price'    => ['nullable', 'integer', 'min:0'],
             'free_ad_days_validity' => ['nullable', 'integer', 'min:1'],
+            'package_selection_ads_count' => ['nullable', 'integer', 'min:0'],
             'featured_user_max_ads' => ['nullable', 'integer', 'min:1'],
         ];
     }
@@ -72,7 +74,7 @@ class SystemSettingController extends Controller
     protected function groupForKey(string $key): string
     {
         if ($key === 'panner_image') return 'appearance';
-        if (in_array($key, ['free_ads_count','free_ads_max_price', 'free_ad_days_validity'], true)) return 'ads';
+        if (in_array($key, ['free_ads_count','free_ads_max_price', 'free_ad_days_validity', 'package_selection_ads_count'], true)) return 'ads';
         if ($key === 'featured_user_max_ads') return 'home';
         return 'general';
     }
