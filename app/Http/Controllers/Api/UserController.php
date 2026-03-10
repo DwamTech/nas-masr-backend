@@ -388,6 +388,24 @@ class UserController extends Controller
         ], 200);
     }
 
+    public function deleteMyAccount(Request $request)
+    {
+        $user = $request->user();
+
+        if (!$user) {
+            return response()->json([
+                'message' => 'User not authenticated'
+            ], 401);
+        }
+
+        $user->tokens()->delete();
+        $user->delete();
+
+        return response()->json([
+            'message' => 'Account deleted successfully'
+        ], 200);
+    }
+
     //Admin control
     public function blockedUser(Request $request, User $user)
     {

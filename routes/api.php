@@ -291,6 +291,7 @@ Route::middleware('auth:sanctum')->post('/add-car', [CarController::class, 'stor
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [UserController::class, 'logout']);
+    Route::delete('/delete-account', [UserController::class, 'deleteMyAccount']);
     //verify otp
     Route::post('/verify-otp', [UserController::class, 'verifyOtp']);
     Route::get('/get-profile', [UserController::class, 'getUserProfile']);
