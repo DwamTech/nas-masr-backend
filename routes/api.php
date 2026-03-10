@@ -115,6 +115,7 @@ Route::prefix('v1/{section}')->group(function () {
     // Public route for listing ads (search/browse)
     Route::get('listings', [ListingController::class, 'index']);
     Route::get('listings/{listing}', [ListingController::class, 'show']);
+    Route::post('listings/{listing}/contact-click', [ListingController::class, 'trackContactClick']);
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::apiResource('listings', ListingController::class)->only(['store', 'update', 'destroy']);

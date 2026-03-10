@@ -702,6 +702,28 @@ class ListingController extends Controller
         ]);
     }
 
+    public function trackContactClick(string $section, Listing $listing, Request $request): \Illuminate\Http\JsonResponse
+    {
+        $sec = Section::fromSlug($section);
+        abort_if($listing->category_id !== $sec->id(), 404);
+
+        $data = $request->validate([
+            'type' => ['required', 'string', 'in:whatsapp,call'],
+        ]);
+
+        $column = $data['type'] === 'whatsapp' ? 'whatsapp_clicks' : 'call_clicks';
+        $listing->increment($column, 1);
+        $listing->refresh();
+
+        return response()->json([
+            'success' => true,
+            'listing_id' => (int) $listing->id,
+            'type' => $data['type'],
+            'whatsapp_clicks' => (int) ($listing->whatsapp_clicks ?? 0),
+            'call_clicks' => (int) ($listing->call_clicks ?? 0),
+        ]);
+    }
+
     protected function userIsAdmin($user): bool
     {
         return $user->role == 'admin';

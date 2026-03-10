@@ -431,6 +431,10 @@ class UserController extends Controller
     public function showUserWithListings(User $user, Request $request)
     {
         $user->loadCount('listings');
+        $viewer = $request->user();
+        $canViewClickMetrics = $viewer
+            && (($viewer->role ?? null) === 'admin' || (int) $viewer->id === (int) $user->id);
+        $clickTotals = $canViewClickMetrics ? $this->getUserContactClickTotals($user) : null;
 
         $singleSlug = $request->query('category_slug') ?? $request->query('slug');
         $multiSlugs = $request->query('category_slugs') ?? $request->query('slugs'); // "a,b,c"
@@ -470,6 +474,8 @@ class UserController extends Controller
                 'listings.price',
                 'listings.rank',
                 'listings.views',
+                'listings.whatsapp_clicks',
+                'listings.call_clicks',
                 'listings.lat',
                 'listings.lng',
                 'listings.contact_phone',
@@ -487,7 +493,7 @@ class UserController extends Controller
 
         $rows = $query->get();
 
-        $items = $rows->map(function ($row) {
+        $items = $rows->map(function ($row) use ($canViewClickMetrics) {
             $attrs = [];
             if ($row->relationLoaded('attributes')) {
                 foreach ($row->attributes as $attr) {
@@ -559,6 +565,11 @@ class UserController extends Controller
                 'global_image_full_url' => $cat ? $cat->global_image_full_url : null,
             ];
 
+            if ($canViewClickMetrics) {
+                $data['whatsapp_clicks'] = (int) ($row->whatsapp_clicks ?? 0);
+                $data['call_clicks'] = (int) ($row->call_clicks ?? 0);
+            }
+
             // ✅ لو الكاتيجوري ده بيدعم make/model
             if ($supportsMakeModel) {
                 $data['make'] = ($row->relationLoaded('make') && $row->make) ? $row->make->name : null;
@@ -576,7 +587,22 @@ class UserController extends Controller
             return $data;
         })->values();
 
+        $userPayload = [
+            'id' => $user->id,
+            'name' => $user->name,
+            'phone' => $user->phone,
+            'status' => $user->status ?? 'active',
+            'role' => $user->role ?? 'user',
+            'listings_count' => $user->listings_count ?? 0,
+        ];
+
+        if ($canViewClickMetrics && $clickTotals) {
+            $userPayload['whatsapp_clicks'] = $clickTotals['whatsapp_clicks'];
+            $userPayload['call_clicks'] = $clickTotals['call_clicks'];
+        }
+
         return response()->json([
+            'user' => $userPayload,
             'listings' => $items,
             'meta' => ['total' => $items->count()],
         ]);
@@ -673,6 +699,8 @@ class UserController extends Controller
     // Helper: format user output consistently
     private function formatUserSummary(User $user): array
     {
+        $totals = $this->getUserContactClickTotals($user);
+
         return [
             'id' => $user->id,
             'name' => $user->name,
@@ -682,7 +710,23 @@ class UserController extends Controller
             'status' => $user->status ?? 'active',
             'registered_at' => optional($user->created_at)->toDateString(),
             'listings_count' => $user->listings_count ?? $user->listings()->count(),
+            'whatsapp_clicks' => $totals['whatsapp_clicks'],
+            'call_clicks' => $totals['call_clicks'],
             'role' => $user->role ?? 'user',
+        ];
+    }
+
+    private function getUserContactClickTotals(User $user): array
+    {
+        $totals = Listing::query()
+            ->where('user_id', $user->id)
+            ->selectRaw('COALESCE(SUM(whatsapp_clicks), 0) as whatsapp_clicks')
+            ->selectRaw('COALESCE(SUM(call_clicks), 0) as call_clicks')
+            ->first();
+
+        return [
+            'whatsapp_clicks' => (int) ($totals->whatsapp_clicks ?? 0),
+            'call_clicks' => (int) ($totals->call_clicks ?? 0),
         ];
     }
 

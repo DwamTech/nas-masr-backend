@@ -37,6 +37,8 @@ class Listing extends Model
         'rank',
         'country_code',
         'views',
+        'whatsapp_clicks',
+        'call_clicks',
         'admin_approved',
         'admin_comment',
         'expire_at',
@@ -55,6 +57,8 @@ class Listing extends Model
         'lat' => 'decimal:7',
         'lng' => 'decimal:7',
         'views' => 'int',
+        'whatsapp_clicks' => 'int',
+        'call_clicks' => 'int',
         'isPayment' => 'boolean',
 
     ];

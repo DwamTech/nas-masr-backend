@@ -224,6 +224,8 @@ class StatsController extends Controller
                 });
             })
             ->withCount('listings')
+            ->withSum('listings as whatsapp_clicks', 'whatsapp_clicks')
+            ->withSum('listings as call_clicks', 'call_clicks')
             ->orderByDesc('created_at')
             ->paginate($perPage);
 
@@ -238,6 +240,8 @@ class StatsController extends Controller
                 'status' => $u->status ?? 'active',
                 'registered_at' => optional($u->created_at)->toDateString(),
                 'listings_count' => $u->listings_count ?? 0,
+                'whatsapp_clicks' => (int) ($u->whatsapp_clicks ?? 0),
+                'call_clicks' => (int) ($u->call_clicks ?? 0),
                 'role' => $u->role ?? 'user',
                 'phone_verified' => (bool) $u->otp_verified,
             ];

@@ -67,6 +67,9 @@ class ListingResource extends JsonResource
             ? $this->subSection->name
             : null;
 
+        $viewer = $request->user();
+        $canViewClickMetrics = $viewer
+            && (($viewer->role ?? null) === 'admin' || (int) $viewer->id === (int) $this->user_id);
 
         return [
             'id' => $this->id,
@@ -110,6 +113,8 @@ class ListingResource extends JsonResource
 
             'attributes' => $attrs,
             'views' => $this->views,
+            'whatsapp_clicks' => $this->when($canViewClickMetrics, (int) ($this->whatsapp_clicks ?? 0)),
+            'call_clicks' => $this->when($canViewClickMetrics, (int) ($this->call_clicks ?? 0)),
             'rank' => $this->rank,
             'country_code' => $this->country_code,
 
