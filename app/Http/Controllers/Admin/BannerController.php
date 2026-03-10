@@ -51,6 +51,7 @@ class BannerController extends Controller
         'home_ads',
         'home',
         'payment_single_ad_methods',
+        'payment_packages_subscribe',
         'unified' // fallback
     ];
 

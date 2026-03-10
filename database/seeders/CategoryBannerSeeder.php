@@ -52,6 +52,7 @@ class CategoryBannerSeeder extends Seeder
             'tools',
             'missing',
             'payment_single_ad_methods',
+            'payment_packages_subscribe',
             'unified'
         ];
 
