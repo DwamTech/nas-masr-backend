@@ -219,11 +219,12 @@ class categoryController extends Controller
             return 'MainSection';
         }
 
-        if ($parent === '') {
-            return $field;
-        }
+        // Canonical key for model across model/car_model naming variants.
+        if (in_array($field, ['model', 'car_model'], true)) {
+            if ($parent === '') {
+                return 'model';
+            }
 
-        if ($field === 'model') {
             $makeId = $this->resolveMakeIdFromParent($parent);
             if ($makeId !== null) {
                 // Canonical key for per-make model ranks
@@ -232,6 +233,10 @@ class categoryController extends Controller
 
             // Fallback for compatibility when make cannot be resolved
             return "model_" . $this->normalizeRankToken($parent);
+        }
+
+        if ($parent === '') {
+            return $field;
         }
 
         // Canonical per-main-section key for sub section ranks.
@@ -296,7 +301,10 @@ class categoryController extends Controller
     private function shouldSyncAutomotiveRanks(string $resolvedFieldName): bool
     {
         return $resolvedFieldName === 'brand'
+            || $resolvedFieldName === 'model'
+            || $resolvedFieldName === 'car_model'
             || str_starts_with($resolvedFieldName, 'model_make_id_')
+            || str_starts_with($resolvedFieldName, 'car_model_make_id_')
             || str_starts_with($resolvedFieldName, 'model_');
     }
 

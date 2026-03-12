@@ -95,6 +95,10 @@ class CategoryFieldsController extends Controller
         })->values()->all();
 
         $section = $slug ? Section::fromSlug($slug) : null;
+        $automotiveFallbackCategoryId = null;
+        if ($slug && in_array($slug, ['cars_rent', 'spare-parts'], true)) {
+            $automotiveFallbackCategoryId = Category::where('slug', 'cars')->value('id');
+        }
 
         $supportsMakeModel = $section?->supportsMakeModel() ?? false;
         $supportsSections = $section?->supportsSections() ?? false; // ✅ جديد
@@ -110,16 +114,24 @@ class CategoryFieldsController extends Controller
                 
                 // Sort models by rank if ranks exist
                 if ($category) {
-                    $modelNames = $this->sortOptionsByRankWithFallbackFields(
-                        $category->id,
+                    $modelNames = $this->sortOptionsByRankWithCategoryFallback(
+                        (int) $category->id,
+                        $automotiveFallbackCategoryId ? (int) $automotiveFallbackCategoryId : null,
                         [
                             "model_make_id_{$make->id}",
+                            "car_model_make_id_{$make->id}",
                             'model_' . $this->normalizeRankToken($make->name),
+                            'car_model_' . $this->normalizeRankToken($make->name),
                             "model_{$make->name}",
+                            "car_model_{$make->name}",
                             "Model_{$make->name}",
+                            "CarModel_{$make->name}",
                             "model::{$make->name}",
+                            "car_model::{$make->name}",
                             'model',
                             'Model',
+                            'car_model',
+                            'CarModel',
                         ],
                         $modelNames
                     );
@@ -149,8 +161,9 @@ class CategoryFieldsController extends Controller
             // Sort makes by rank if ranks exist
             $makeNames = array_keys($makesArray);
             if ($category) {
-                $makeNames = $this->sortOptionsByRankWithFallbackFields(
-                    $category->id,
+                $makeNames = $this->sortOptionsByRankWithCategoryFallback(
+                    (int) $category->id,
+                    $automotiveFallbackCategoryId ? (int) $automotiveFallbackCategoryId : null,
                     ['brand', 'Brand', 'make', 'Make', 'car_make', 'CarMake'],
                     $makeNames
                 );
@@ -376,6 +389,54 @@ class CategoryFieldsController extends Controller
         }
 
         return $options;
+    }
+
+    /**
+     * Sort options using primary category ranks, and fallback category ranks if primary has no rank map.
+     *
+     * @param int $primaryCategoryId
+     * @param int|null $fallbackCategoryId
+     * @param array<int, string> $fieldNames
+     * @param array $options
+     * @return array
+     */
+    private function sortOptionsByRankWithCategoryFallback(
+        int $primaryCategoryId,
+        ?int $fallbackCategoryId,
+        array $fieldNames,
+        array $options
+    ): array {
+        if ($this->hasAnyRankForFields($primaryCategoryId, $fieldNames)) {
+            return $this->sortOptionsByRankWithFallbackFields($primaryCategoryId, $fieldNames, $options);
+        }
+
+        if ($fallbackCategoryId && $fallbackCategoryId !== $primaryCategoryId && $this->hasAnyRankForFields($fallbackCategoryId, $fieldNames)) {
+            return $this->sortOptionsByRankWithFallbackFields($fallbackCategoryId, $fieldNames, $options);
+        }
+
+        return $options;
+    }
+
+    /**
+     * Check if any rank map exists for the given field names in a category.
+     *
+     * @param int $categoryId
+     * @param array<int, string> $fieldNames
+     * @return bool
+     */
+    private function hasAnyRankForFields(int $categoryId, array $fieldNames): bool
+    {
+        foreach ($fieldNames as $fieldName) {
+            $key = trim((string) $fieldName);
+            if ($key === '') {
+                continue;
+            }
+            if (!empty($this->getRankMap($categoryId, $key))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
