@@ -113,6 +113,8 @@ class CategoryFieldsController extends Controller
                     $modelNames = $this->sortOptionsByRankWithFallbackFields(
                         $category->id,
                         [
+                            "model_make_id_{$make->id}",
+                            'model_' . $this->normalizeRankToken($make->name),
                             "model_{$make->name}",
                             "Model_{$make->name}",
                             "model::{$make->name}",
@@ -124,7 +126,24 @@ class CategoryFieldsController extends Controller
                 }
                 
                 // معالجة الموديلات لضمان "غير ذلك" في الآخر
-                $makesArray[$make->name] = OptionsHelper::processOptions($modelNames, false, false);
+                $orderedModelNames = OptionsHelper::processOptions($modelNames, false, false);
+                $modelsByName = $make->models->keyBy('name');
+                $orderedModels = collect($orderedModelNames)
+                    ->values()
+                    ->map(function ($modelName, $idx) use ($modelsByName) {
+                        $model = $modelsByName->get($modelName);
+                        return [
+                            'id' => $model?->id,
+                            'name' => $modelName,
+                            'rank' => $idx + 1,
+                        ];
+                    })
+                    ->all();
+
+                $makesArray[$make->name] = [
+                    'id' => $make->id,
+                    'models' => $orderedModels,
+                ];
             }
             
             // Sort makes by rank if ranks exist
@@ -138,12 +157,12 @@ class CategoryFieldsController extends Controller
             }
             
             // تحويل للصيغة المطلوبة للفرونت إند
-            $makes = collect($makeNames)->map(function ($makeName) use ($makesArray) {
+            $makes = collect($makeNames)->values()->map(function ($makeName, $idx) use ($makesArray) {
                 return [
+                    'id' => $makesArray[$makeName]['id'] ?? null,
                     'name' => $makeName,
-                    'models' => collect($makesArray[$makeName])->map(function ($modelName) {
-                        return ['name' => $modelName];
-                    })->values()->all()
+                    'rank' => $idx + 1,
+                    'models' => $makesArray[$makeName]['models'] ?? [],
                 ];
             })->values()->all();
         }
@@ -425,6 +444,21 @@ class CategoryFieldsController extends Controller
         }
         
         return $result;
+    }
+
+    /**
+     * Normalize text token for rank key matching.
+     *
+     * @param string $value
+     * @return string
+     */
+    private function normalizeRankToken(string $value): string
+    {
+        $v = preg_replace('/\s+/u', ' ', trim($value));
+        if (!is_string($v)) {
+            return '';
+        }
+        return strtolower($v);
     }
 
     /**

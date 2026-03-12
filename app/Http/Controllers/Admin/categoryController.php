@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\categoryRequest;
 use App\Http\Resources\Admin\CategoryResource;
 use App\Models\AuditLog;
 use App\Models\Category;
+use App\Models\Make;
 use App\Services\OptionRankService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -207,10 +208,62 @@ class categoryController extends Controller
         }
 
         if (strtolower($field) === 'model') {
-            return "model_{$parent}";
+            $makeId = $this->resolveMakeIdFromParent($parent);
+            if ($makeId !== null) {
+                // Canonical key for per-make model ranks
+                return "model_make_id_{$makeId}";
+            }
+
+            // Fallback for compatibility when make cannot be resolved
+            return "model_" . $this->normalizeRankToken($parent);
         }
 
         return $field;
+    }
+
+    /**
+     * Resolve make id from rank parent context.
+     * Accepts either numeric id or make name.
+     *
+     * @param string $parent
+     * @return int|null
+     */
+    private function resolveMakeIdFromParent(string $parent): ?int
+    {
+        if ($parent === '') {
+            return null;
+        }
+
+        if (ctype_digit($parent)) {
+            $id = (int) $parent;
+            return Make::whereKey($id)->exists() ? $id : null;
+        }
+
+        $normalized = $this->normalizeRankToken($parent);
+        if ($normalized === '') {
+            return null;
+        }
+
+        $make = Make::query()->get(['id', 'name'])->first(function ($m) use ($normalized) {
+            return $this->normalizeRankToken((string) $m->name) === $normalized;
+        });
+
+        return $make?->id ? (int) $make->id : null;
+    }
+
+    /**
+     * Normalize text token for rank keys matching.
+     *
+     * @param string $value
+     * @return string
+     */
+    private function normalizeRankToken(string $value): string
+    {
+        $v = preg_replace('/\s+/u', ' ', trim($value));
+        if (!is_string($v)) {
+            return '';
+        }
+        return strtolower($v);
     }
 
     /**

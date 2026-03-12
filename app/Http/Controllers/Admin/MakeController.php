@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Category;
+use App\Models\CategoryFieldOptionRank;
 use App\Models\Listing;
 use App\Models\Make;
 use App\Models\CarModel;
@@ -14,56 +16,87 @@ use Illuminate\Validation\Rule;
 
 class MakeController extends Controller
 {
+    /**
+     * Request-level cache for ranks map.
+     *
+     * @var array<string, array<string, int>>
+     */
+    private array $fieldRankMapCache = [];
+
     public function index()
     {
-        // Get makes with their models, sorted by rank
-        $items = Make::with(['models' => function ($query) {
-            // Sort models by rank (from category_field_option_ranks table)
-            $query->leftJoin('category_field_option_ranks', function ($join) {
-                $join->on('models.name', '=', 'category_field_option_ranks.option_value')
-                     ->where('category_field_option_ranks.field_name', '=', 'model')
-                     ->whereExists(function ($query) {
-                         $query->select(\DB::raw(1))
-                               ->from('categories')
-                               ->whereColumn('categories.id', 'category_field_option_ranks.category_id')
-                               ->where('categories.slug', 'cars');
-                     });
-            })
-            ->select('models.*')
-            ->orderByRaw('COALESCE(category_field_option_ranks.rank, 999999) ASC');
-        }])
-        // Sort makes by rank
-        ->leftJoin('category_field_option_ranks', function ($join) {
-            $join->on('makes.name', '=', 'category_field_option_ranks.option_value')
-                 ->where('category_field_option_ranks.field_name', '=', 'brand')
-                 ->whereExists(function ($query) {
-                     $query->select(\DB::raw(1))
-                           ->from('categories')
-                           ->whereColumn('categories.id', 'category_field_option_ranks.category_id')
-                           ->where('categories.slug', 'cars');
-                 });
-        })
-        ->select('makes.*')
-        ->orderByRaw('COALESCE(category_field_option_ranks.rank, 999999) ASC')
-        ->get();
+        $categoryId = Category::where('slug', 'cars')->value('id');
+        $items = Make::with('models')->get();
         
         // معالجة الماركات والموديلات (الترتيب سيتم في الفرونت إند)
         $makesArray = [];
         foreach ($items as $make) {
             $modelNames = $make->models->pluck('name')->toArray();
-            // لا نعيد الترتيب - نحافظ على ترتيب الـ query
+
+            if ($categoryId) {
+                $modelNames = $this->sortOptionsByRankWithFallbackFields(
+                    (int) $categoryId,
+                    [
+                        "model_make_id_{$make->id}",
+                        'model_' . $this->normalizeRankToken((string) $make->name),
+                        "model_{$make->name}",
+                        "Model_{$make->name}",
+                        "model::{$make->name}",
+                        'model',
+                        'Model',
+                    ],
+                    $modelNames
+                );
+            }
+
+            $modelNames = \App\Support\OptionsHelper::processOptions($modelNames, false, false);
+            $modelsByName = $make->models->keyBy('name');
             
             $makesArray[] = [
                 'id' => $make->id,
                 'name' => $make->name,
-                'models' => collect($modelNames)->map(function($modelName) use ($make) {
+                'models' => collect($modelNames)->values()->map(function($modelName, $idx) use ($make, $modelsByName) {
+                    $model = $modelsByName->get($modelName);
                     return (object)[
+                        'id' => $model?->id,
                         'name' => $modelName,
-                        'make_id' => $make->id
+                        'make_id' => $make->id,
+                        'rank' => $idx + 1,
                     ];
                 })->all()
             ];
         }
+
+        if ($categoryId) {
+            $nameOrder = $this->sortOptionsByRankWithFallbackFields(
+                (int) $categoryId,
+                ['brand', 'Brand'],
+                array_values(array_map(fn ($row) => (string) $row['name'], $makesArray))
+            );
+
+            $byName = [];
+            foreach ($makesArray as $row) {
+                $byName[(string) $row['name']] = $row;
+            }
+
+            $sortedMakesArray = [];
+            foreach ($nameOrder as $name) {
+                if (isset($byName[$name])) {
+                    $sortedMakesArray[] = $byName[$name];
+                    unset($byName[$name]);
+                }
+            }
+            foreach ($byName as $row) {
+                $sortedMakesArray[] = $row;
+            }
+
+            $makesArray = $sortedMakesArray;
+        }
+
+        $makesArray = collect($makesArray)->values()->map(function ($row, $idx) {
+            $row['rank'] = $idx + 1;
+            return $row;
+        })->all();
         
         // إضافة "غير ذلك" في الآخر
         $makesArray[] = [
@@ -191,6 +224,24 @@ class MakeController extends Controller
         
         // معالجة الموديلات (الترتيب سيتم في الفرونت إند)
         $modelNames = $models->pluck('name')->toArray();
+
+        $categoryId = Category::where('slug', 'cars')->value('id');
+        if ($categoryId) {
+            $modelNames = $this->sortOptionsByRankWithFallbackFields(
+                (int) $categoryId,
+                [
+                    "model_make_id_{$make->id}",
+                    'model_' . $this->normalizeRankToken((string) $make->name),
+                    "model_{$make->name}",
+                    "Model_{$make->name}",
+                    "model::{$make->name}",
+                    'model',
+                    'Model',
+                ],
+                $modelNames
+            );
+        }
+
         $modelNames = \App\Support\OptionsHelper::processOptions($modelNames, false, false);
         
         // تحويل إلى objects مع الحفاظ على الترتيب
@@ -204,6 +255,107 @@ class MakeController extends Controller
         });
         
         return response()->json($sortedModels);
+    }
+
+    /**
+     * Try multiple rank field names and use the first one that has data.
+     *
+     * @param int $categoryId
+     * @param array<int, string> $fieldNames
+     * @param array $options
+     * @return array
+     */
+    private function sortOptionsByRankWithFallbackFields(int $categoryId, array $fieldNames, array $options): array
+    {
+        foreach ($fieldNames as $fieldName) {
+            $key = trim((string) $fieldName);
+            if ($key === '') {
+                continue;
+            }
+            $rankMap = $this->getRankMap($categoryId, $key);
+            if (!empty($rankMap)) {
+                return $this->sortOptionsByExplicitRankMap($options, $rankMap);
+            }
+        }
+
+        return $options;
+    }
+
+    /**
+     * Resolve rank map with per-request caching.
+     *
+     * @param int $categoryId
+     * @param string $fieldName
+     * @return array<string, int>
+     */
+    private function getRankMap(int $categoryId, string $fieldName): array
+    {
+        $cacheKey = $categoryId . '|' . $fieldName;
+        if (array_key_exists($cacheKey, $this->fieldRankMapCache)) {
+            return $this->fieldRankMapCache[$cacheKey];
+        }
+
+        $rankMap = CategoryFieldOptionRank::where('category_id', $categoryId)
+            ->where('field_name', $fieldName)
+            ->pluck('rank', 'option_value')
+            ->toArray();
+
+        $this->fieldRankMapCache[$cacheKey] = $rankMap;
+        return $rankMap;
+    }
+
+    /**
+     * Sort options with a preloaded rank map.
+     *
+     * @param array $options
+     * @param array<string, int> $rankMap
+     * @return array
+     */
+    private function sortOptionsByExplicitRankMap(array $options, array $rankMap): array
+    {
+        $otherOption = null;
+        $withRanks = [];
+        $withoutRanks = [];
+
+        foreach ($options as $option) {
+            if ($option === 'غير ذلك') {
+                $otherOption = $option;
+            } elseif (isset($rankMap[$option])) {
+                $withRanks[] = ['option' => $option, 'rank' => $rankMap[$option]];
+            } else {
+                $withoutRanks[] = $option;
+            }
+        }
+
+        usort($withRanks, function ($a, $b) {
+            return $a['rank'] <=> $b['rank'];
+        });
+
+        $sortedWithRanks = array_map(function ($item) {
+            return $item['option'];
+        }, $withRanks);
+
+        $result = array_merge($sortedWithRanks, $withoutRanks);
+        if ($otherOption !== null) {
+            $result[] = $otherOption;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Normalize text token for rank key matching.
+     *
+     * @param string $value
+     * @return string
+     */
+    private function normalizeRankToken(string $value): string
+    {
+        $v = preg_replace('/\s+/u', ' ', trim($value));
+        if (!is_string($v)) {
+            return '';
+        }
+        return strtolower($v);
     }
 
     public function addModel(Request $request, Make $make)
