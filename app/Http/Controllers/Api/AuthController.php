@@ -27,6 +27,18 @@ class AuthController extends Controller
             $existingUser = User::where('email', $data['email'])->first();
         }
 
+        // Validate referral_code if provided
+        $agentClient = null;
+        if (!empty($data['referral_code'])) {
+            $agentClient = UserClient::where('user_id', $data['referral_code'])->first();
+            
+            if (!$agentClient) {
+                return response()->json([
+                    'message' => 'كود الإحالة غير صحيح. يرجى التحقق من الكود والمحاولة مرة أخرى.'
+                ], 404);
+            }
+        }
+
         if ($existingUser) {
             // LOGIN FLOW - works for both phone and email
 
@@ -38,8 +50,10 @@ class AuthController extends Controller
                 return response()->json(['message' => 'Invalid credentials'], 401);
             }
 
-            if (!empty($data['referral_code']) && $existingUser->referral_code !== $data['referral_code']) {
-                return response()->json(['message' => 'Invalid referral code'], 401);
+            // Update referral_code if provided during login
+            if ($agentClient && $existingUser->referral_code !== $data['referral_code']) {
+                $existingUser->referral_code = $agentClient->user_id;
+                $existingUser->save();
             }
 
             $message = "User logged in successfully.";
@@ -53,46 +67,26 @@ class AuthController extends Controller
                 ], 422);
             }
 
-            if (!empty($data['referral_code'])) {
-                // Check if referral_code is a valid user ID who is a representative
-                // UPDATED: Now checks is_representative flag instead of role
-                $delegateUser = User::where('id', $data['referral_code'])
-                    ->where('is_representative', true)
-                    ->first();
-
-                if (!$delegateUser) {
-                    return response([
-                        'message' => 'Invalid delegate code. Please check the code and try again.'
-                    ], 404);
-                }
-            }
-
             $user = User::create([
                 'name' => $data['name'] ?? null,
                 'phone' => $data['phone'],
                 'role' => 'user',
                 'password' => Hash::make($data['password']),
                 'country_code' => $data['country_code'] ?? null,
-                'referral_code' => $data['referral_code'] ?? null,
+                'referral_code' => $agentClient?->user_id ?? null,
             ]);
 
-            // If user registered with a delegate code, add them to the delegate's clients list
-            if (!empty($data['referral_code'])) {
-                $userClient = UserClient::firstOrCreate(
-                    ['user_id' => $data['referral_code']],
-                    ['clients' => []]
-                );
+            // If user registered with a referral code, add them to the agent's clients list
+            if ($agentClient) {
+                $clients = $agentClient->clients ?? [];
 
-                $clients = $userClient->clients ?? [];
-
-                // Check if user is already in the list (shouldn't happen, but just in case)
+                // Add user to clients list if not already present
                 if (!in_array($user->id, $clients)) {
                     $clients[] = $user->id;
-                    $userClient->clients = $clients;
-                    $userClient->save();
+                    $agentClient->clients = $clients;
+                    $agentClient->save();
                 }
             }
-
 
             $message = "User registered successfully.";
         }

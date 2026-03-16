@@ -68,40 +68,35 @@ class UserController extends Controller
             'address' => ['sometimes', 'nullable', 'string'],
         ]);
 
+        // Validate referral_code if provided
+        $agentClient = null;
         if (!empty($validated['referral_code'])) {
             // Don't allow changing referral_code if already set
             if (!empty($user->referral_code) && $user->referral_code !== $validated['referral_code']) {
                 return response([
-                    'message' => 'You cannot change your delegate code once it has been set.'
+                    'message' => 'لا يمكنك تغيير كود الإحالة بعد تعيينه.'
                 ], 422);
             }
 
-            // Check if referral_code is a valid user ID who is a representative
-            // UPDATED: Now checks is_representative flag instead of role
-            $delegateUser = User::where('id', $validated['referral_code'])
-                ->where('is_representative', true)
-                ->first();
+            // Check if referral_code exists in user_clients table
+            $agentClient = UserClient::where('user_id', $validated['referral_code'])->first();
 
-            if (!$delegateUser) {
+            if (!$agentClient) {
                 return response([
-                    'message' => 'Invalid delegate code. Please check the code and try again.'
+                    'message' => 'كود الإحالة غير صحيح. يرجى التحقق من الكود والمحاولة مرة أخرى.'
                 ], 404);
             }
 
-            // Add user to delegate's clients list
-            $userClient = UserClient::firstOrCreate(
-                ['user_id' => $validated['referral_code']],
-                ['clients' => []]
-            );
-
-            $clients = $userClient->clients ?? [];
-
-            // Check if user is already in the list
+            // Add user to agent's clients list if not already present
+            $clients = $agentClient->clients ?? [];
             if (!in_array($user->id, $clients)) {
                 $clients[] = $user->id;
-                $userClient->clients = $clients;
-                $userClient->save();
+                $agentClient->clients = $clients;
+                $agentClient->save();
             }
+
+            // Update user's referral_code
+            $validated['referral_code'] = $agentClient->user_id;
         }
 
         $user->update($validated);
