@@ -24,7 +24,9 @@ return [
         'http://172.29.0.1:3000',      // ✅ Docker Frontend IP
         'http://192.168.1.60:3001',
         'http://192.168.1.15:3000',
-        'http://localhost:3000'
+        'http://localhost:3000',
+        'https://www.nasmasr.app',
+        'https://nasmasr.app',
     ],
 
     'allowed_origins_patterns' => [
