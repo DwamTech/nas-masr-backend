@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\UserConversation;
 use App\Services\ChatService;
+use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -115,7 +116,7 @@ class ChatController extends Controller
      * The reply is recorded with the admin's ID (for accountability)
      * but appears as "Support Team" to the user.
      */
-    public function reply(Request $request): JsonResponse
+    public function reply(Request $request, NotificationService $notifications): JsonResponse
     {
         $data = $request->validate([
             'user_id' => ['required', 'integer', 'exists:users,id'],
@@ -131,6 +132,19 @@ class ChatController extends Controller
         $user = User::findOrFail($data['user_id']);
 
         $conversation = $this->chatService->adminReplyToSupport($admin, $user, $data['message']);
+        $notifications->dispatch(
+            $user->id,
+            'رسالة من الإدارة',
+            $data['message'],
+            'support_reply',
+            [
+                'conversation_id' => $conversation->conversation_id,
+                'sender_id' => $admin->id,
+                'sender_name' => $admin->name,
+            ],
+            false,
+            NotificationService::SOURCE_ADMIN
+        );
 
         return response()->json([
             'message' => 'تم إرسال الرد بنجاح',

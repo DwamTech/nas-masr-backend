@@ -7,6 +7,7 @@ use App\Models\SystemSetting;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class NotificationService
 {
@@ -38,6 +39,7 @@ class NotificationService
     {
         $user = User::findOrFail($userId);
         $resolvedSourceType = $this->resolveSourceType($type, $bypassCooldown, $sourceType);
+        $resolvedData = $this->mergeSourceTypeIntoData($data, $resolvedSourceType);
 
         // ✅ إشعارات الأدمن: لا قيود، لا cooldown، لا شيء - تنفيذ فوري
         if ($type === 'الاداره' || $bypassCooldown || $resolvedSourceType === self::SOURCE_ADMIN) {
@@ -48,14 +50,9 @@ class NotificationService
             ]);
 
             // Create internal notification
-            $notification = Notification::create([
-                'user_id' => $user->id,
-                'title' => $title,
-                'body' => $body,
-                'type' => $type,
-                'source_type' => $resolvedSourceType,
-                'data' => $data,
-            ]);
+            $notification = Notification::create(
+                $this->buildNotificationAttributes($user, $title, $body, $type, $resolvedSourceType, $resolvedData)
+            );
 
             // Check if external notification should be sent
             $globalEnabled = Cache::remember('settings:enable_global_external_notif', now()->addHours(6), function () {
@@ -79,7 +76,7 @@ class NotificationService
                     'body' => $body,
                     'type' => $type,
                     'source_type' => $resolvedSourceType,
-                    'data' => $data,
+                    'data' => $resolvedData,
                 ]);
                 
                 Log::info('📤 External notification result', [
@@ -98,7 +95,7 @@ class NotificationService
 
         // ⏱️ الإشعارات العادية: تخضع للـ cooldown
         // Build cache key with type and listing_id for per-listing rate limiting
-        $listingId = $data['listing_id'] ?? null;
+        $listingId = $resolvedData['listing_id'] ?? null;
         $cacheKeySuffix = $type ? ":{$type}" : '';
         $cacheKeySuffix .= $listingId ? ":{$listingId}" : '';
         $cacheKey = "notif:cooldown:{$user->id}{$cacheKeySuffix}";
@@ -118,14 +115,9 @@ class NotificationService
         }
 
         // Cooldown passed - create internal notification
-        $notification = Notification::create([
-            'user_id' => $user->id,
-            'title' => $title,
-            'body' => $body,
-            'type' => $type,
-            'source_type' => $resolvedSourceType,
-            'data' => $data,
-        ]);
+        $notification = Notification::create(
+            $this->buildNotificationAttributes($user, $title, $body, $type, $resolvedSourceType, $resolvedData)
+        );
 
         // Update cooldown timestamp
         Cache::put($cacheKey, $nowTs, now()->addSeconds(self::COOLDOWN_SECONDS));
@@ -145,7 +137,7 @@ class NotificationService
                 'body' => $body,
                 'type' => $type,
                 'source_type' => $resolvedSourceType,
-                'data' => $data,
+                'data' => $resolvedData,
             ]);
         }
 
@@ -167,6 +159,48 @@ class NotificationService
         }
 
         return null;
+    }
+
+    private function mergeSourceTypeIntoData(?array $data, ?string $sourceType): ?array
+    {
+        if (empty($sourceType)) {
+            return $data;
+        }
+
+        $resolvedData = $data ?? [];
+        $resolvedData['source_type'] = $resolvedData['source_type'] ?? $sourceType;
+
+        return $resolvedData;
+    }
+
+    private function buildNotificationAttributes(
+        User $user,
+        string $title,
+        string $body,
+        ?string $type,
+        ?string $sourceType,
+        ?array $data
+    ): array {
+        $attributes = [
+            'user_id' => $user->id,
+            'title' => $title,
+            'body' => $body,
+            'type' => $type,
+            'data' => $data,
+        ];
+
+        if ($this->supportsSourceTypeColumn()) {
+            $attributes['source_type'] = $sourceType;
+        }
+
+        return $attributes;
+    }
+
+    private function supportsSourceTypeColumn(): bool
+    {
+        return Cache::remember('schema:notifications:has_source_type', now()->addMinutes(30), function () {
+            return Schema::hasColumn('notifications', 'source_type');
+        });
     }
 
     protected function sendExternal(User $user, array $payload): bool

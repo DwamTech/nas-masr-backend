@@ -142,7 +142,7 @@ class ChatService
     {
         $conversationId = $this->getConversationId($user, null, UserConversation::TYPE_SUPPORT);
 
-        return UserConversation::create([
+        $conversation = UserConversation::create([
             'conversation_id' => $conversationId,
             'sender_id' => $admin->id,
             'sender_type' => User::class,
@@ -151,6 +151,10 @@ class ChatService
             'message' => $message,
             'type' => UserConversation::TYPE_SUPPORT,
         ]);
+
+        event(new MessageSent($conversation));
+
+        return $conversation;
     }
 
     /*
