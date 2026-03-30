@@ -1171,10 +1171,76 @@ class UserController extends Controller
     }
     
     /**
-     * حفظ/تحديث FCM Token للمستخدم
-     * POST /api/fcm-token
+     * Update or create a guest user by guest_uuid and store their FCM token.
+     * POST /api/fcm-token  (public - no auth required)
      */
+    /**
+     * Get guest user info by guest_uuid.
+     * GET /api/fcm-token?guest_uuid=xxx  (public)
+     */
+    public function getGuestUser(Request $request)
+    {
+        $request->validate([
+            'guest_uuid' => ['required', 'string'],
+        ]);
+
+        $user = User::where('guest_uuid', $request->query('guest_uuid'))->first();
+
+        if (!$user) {
+            return response()->json([
+                'message' => 'لم يتم العثور على المستخدم الضيف.',
+            ], 404);
+        }
+
+        return response()->json([
+            'id'         => $user->id,
+            'guest_uuid' => $user->guest_uuid,
+            'fcm_token'  => $user->fcm_token,
+        ]);
+    }
+
     public function updateFcmToken(Request $request)
+    {
+        $data = $request->validate([
+            'guest_uuid' => ['required', 'string', 'max:255'],
+            'fcm_token'  => ['required', 'string', 'max:255'],
+        ]);
+
+        $user = User::where('guest_uuid', $data['guest_uuid'])->first();
+
+        if ($user) {
+            $user->fcm_token = $data['fcm_token'];
+            if ($user->role === 'guest' && !$user->receive_external_notif) {
+                $user->receive_external_notif = true;
+            }
+            $user->save();
+
+            return response()->json([
+                'message'    => 'تم العثور على المستخدم وتحديث FCM token بنجاح.',
+                'guest_uuid' => $data['guest_uuid'],
+                'fcm_token'  => $data['fcm_token'],
+            ]);
+        }
+
+        User::create([
+            'guest_uuid'             => $data['guest_uuid'],
+            'fcm_token'              => $data['fcm_token'],
+            'role'                   => 'guest',
+            'receive_external_notif' => true,
+        ]);
+
+        return response()->json([
+            'message'    => 'تم إنشاء مستخدم ضيف جديد بنجاح.',
+            'guest_uuid' => $data['guest_uuid'],
+            'fcm_token'  => $data['fcm_token'],
+        ], 201);
+    }
+
+    /**
+     * Update FCM token for the authenticated user.
+     * POST /api/user/fcm-token  (auth required)
+     */
+    public function updateUserFcmToken(Request $request)
     {
         $data = $request->validate([
             'fcm_token' => ['required', 'string', 'max:255'],
@@ -1190,10 +1256,10 @@ class UserController extends Controller
     }
 
     /**
-     * حذف FCM Token (عند تسجيل الخروج)
-     * DELETE /api/fcm-token
+     * Delete FCM token for the authenticated user (on logout).
+     * DELETE /api/user/fcm-token  (auth required)
      */
-    public function deleteFcmToken(Request $request)
+    public function deleteUserFcmToken(Request $request)
     {
         $user = $request->user();
         $user->fcm_token = null;

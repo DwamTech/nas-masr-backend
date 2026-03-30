@@ -44,6 +44,7 @@ class User extends Authenticatable
         'profile_image',
         'is_representative',
         'fcm_token',
+        'guest_uuid',
     ];
 
 

@@ -23,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'dashboard.access' => DashboardAccessMiddleware::class,
             'dashboard.page' => DashboardPageMiddleware::class,
             'can.monitor.chat' => CanMonitorChat::class,
+            'chat.user' => \App\Http\Middleware\ResolveChatUser::class,
         ]);
 
         // Apply security headers to all API routes

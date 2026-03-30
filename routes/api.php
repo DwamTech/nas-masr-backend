@@ -337,6 +337,10 @@ Route::middleware('auth:sanctum')->post('/add-car', [CarController::class, 'stor
 // Route::get('/values/{categorySlug?}', [CategoryFieldsController::class, 'index']);
 
 
+Route::post('/fcm-token', [UserController::class, 'updateFcmToken']);
+Route::get('/fcm-token', [UserController::class, 'getGuestUser']);
+//Route::delete('/fcm-token', [UserController::class, 'deleteFcmToken']);
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [UserController::class, 'logout']);
     Route::delete('/delete-account', [UserController::class, 'deleteMyAccount']);
@@ -359,9 +363,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/favorites', [FavoriteController::class, 'index']);
     Route::post('/favorite', [FavoriteController::class, 'toggle']);
 
-    // FCM Token Management
-    Route::post('/fcm-token', [UserController::class, 'updateFcmToken']);
-    Route::delete('/fcm-token', [UserController::class, 'deleteFcmToken']);
+    // FCM Token Management (authenticated users)
+    Route::post('/user/fcm-token', [UserController::class, 'updateUserFcmToken']);
+    Route::delete('/user/fcm-token', [UserController::class, 'deleteUserFcmToken']);
 
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::get('/notifications/status', [NotificationController::class, 'status']);
@@ -375,18 +379,19 @@ Route::middleware('auth:sanctum')->group(function () {
     // Reporting Routes
     Route::post('/listings/{listing}/report', [ListingReportController::class, 'store']);
 
-    // Chat Routes
-    Route::prefix('chat')->group(function () {
-        Route::get('/inbox', [ChatController::class, 'inbox']);
-        Route::get('/unread-count', [ChatController::class, 'unreadCount']);
-        Route::post('/send', [ChatController::class, 'send']);
-        Route::get('/support', [ChatController::class, 'supportHistory']);
-        Route::post('/support', [ChatController::class, 'sendToSupport']);
-        Route::get('/listing-summary/{categorySlug}/{listingId}', [ChatController::class, 'getListingSummary']);
-        Route::get('/{user}', [ChatController::class, 'history']);
-        Route::patch('/{conversationId}/read', [ChatController::class, 'markAsRead']);
-    });
-
     Route::post('/listings/{listing}/renew', [ListingController::class, 'renew']);
 });
+
+// Chat Routes — accessible by both authenticated users and guests (via guest_uuid header)
+Route::prefix('chat')->middleware('chat.user')->group(function () {
+    Route::get('/inbox', [ChatController::class, 'inbox']);
+    Route::get('/unread-count', [ChatController::class, 'unreadCount']);
+    Route::post('/send', [ChatController::class, 'send']);
+    Route::get('/support', [ChatController::class, 'supportHistory']);
+    Route::post('/support', [ChatController::class, 'sendToSupport']);
+    Route::get('/listing-summary/{categorySlug}/{listingId}', [ChatController::class, 'getListingSummary']);
+    Route::get('/{user}', [ChatController::class, 'history']);
+    Route::patch('/{conversationId}/read', [ChatController::class, 'markAsRead']);
+});
+
 Route::post('/settings/notifications', [UserController::class, 'updateNotificationSettings']);
