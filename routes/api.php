@@ -16,7 +16,9 @@ use App\Http\Controllers\Admin\UserSubscriptionsController;
 use App\Http\Controllers\Admin\ChatController as AdminChatController;
 use App\Http\Controllers\Admin\MonitoringController;
 use App\Http\Controllers\Admin\BroadcastController;
+use App\Http\Controllers\Admin\AppOpenReportController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\AppOpenController;
 use App\Http\Controllers\Api\CarController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\FavoriteController;
@@ -190,6 +192,7 @@ Route::prefix('admin')
 
         Route::middleware('dashboard.page:reports.index')->group(function () {
             Route::get('transactions', [TransactionsController::class, 'index']);
+            Route::get('reports/app-opens', [AppOpenReportController::class, 'summary']);
         });
 
         Route::middleware('dashboard.page:users.index')->group(function () {
@@ -357,6 +360,7 @@ Route::middleware('auth:sanctum')->post('/add-car', [CarController::class, 'stor
 
 Route::post('/guest/fcm-token', [UserController::class, 'updateFcmToken']);
 Route::get('/guest/fcm-token', [UserController::class, 'getGuestUser']);
+Route::post('/app-opens', [AppOpenController::class, 'store'])->middleware('chat.user');
 //Route::delete('/fcm-token', [UserController::class, 'deleteFcmToken']);
 
 Route::middleware('auth:sanctum')->group(function () {
