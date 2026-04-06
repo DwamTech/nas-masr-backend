@@ -610,16 +610,24 @@ class UserController extends Controller
         $rows = $query->get();
 
         $items = $rows->map(function ($row) use ($canViewClickMetrics) {
+            $loadedAttributes = method_exists($row, 'getRelation')
+                ? ($row->getRelation('attributes') ?? collect())
+                : collect($row->attributes ?? []);
+
             $attrs = [];
-            if ($row->relationLoaded('attributes')) {
-                foreach ($row->attributes as $attr) {
-                    $attrs[$attr->key] = $this->castEavValueRow($attr);
-                }
+            foreach ($loadedAttributes as $attr) {
+                $attrs[$attr->key] = $this->castEavValueRow($attr);
             }
 
-            // أسماء المحافظة/المدينة
-            $govName = ($row->relationLoaded('governorate') && $row->governorate) ? $row->governorate->name : null;
-            $cityName = ($row->relationLoaded('city') && $row->city) ? $row->city->name : null;
+            $governorate = method_exists($row, 'getRelation')
+                ? $row->getRelation('governorate')
+                : ($row->governorate ?? null);
+            $city = method_exists($row, 'getRelation')
+                ? $row->getRelation('city')
+                : ($row->city ?? null);
+
+            $govName = $governorate?->name;
+            $cityName = $city?->name;
 
             // بيانات القسم (slug + name)
             $catSlug = $row->category_slug;
@@ -645,13 +653,15 @@ class UserController extends Controller
 
             // ✅ لو القسم ده بيدعم رئيسي/فرعي، نرجّعهم بالاسم
             if ($supportsSections) {
-                $mainSectionName = ($row->relationLoaded('mainSection') && $row->mainSection)
-                    ? $row->mainSection->name
-                    : null;
+                $mainSection = method_exists($row, 'getRelation')
+                    ? $row->getRelation('mainSection')
+                    : ($row->mainSection ?? null);
+                $subSection = method_exists($row, 'getRelation')
+                    ? $row->getRelation('subSection')
+                    : ($row->subSection ?? null);
 
-                $subSectionName = ($row->relationLoaded('subSection') && $row->subSection)
-                    ? $row->subSection->name
-                    : null;
+                $mainSectionName = $mainSection?->name;
+                $subSectionName = $subSection?->name;
             }
 
             $data = [
@@ -688,8 +698,15 @@ class UserController extends Controller
 
             // ✅ لو الكاتيجوري ده بيدعم make/model
             if ($supportsMakeModel) {
-                $data['make'] = ($row->relationLoaded('make') && $row->make) ? $row->make->name : null;
-                $data['model'] = ($row->relationLoaded('model') && $row->model) ? $row->model->name : null;
+                $make = method_exists($row, 'getRelation')
+                    ? $row->getRelation('make')
+                    : ($row->make ?? null);
+                $model = method_exists($row, 'getRelation')
+                    ? $row->getRelation('model')
+                    : ($row->model ?? null);
+
+                $data['make'] = $make?->name;
+                $data['model'] = $model?->name;
             }
 
             // ✅ لو القسم بيدعم رئيسي/فرعي، نضيفهم

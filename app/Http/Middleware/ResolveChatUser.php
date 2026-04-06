@@ -18,8 +18,8 @@ class ResolveChatUser
             return $next($request);
         }
 
-        // 2) Try guest_uuid from header
-        $guestUuid = $request->header('guest_uuid');
+        // 2) Try guest_uuid from header (X-Guest-Uuid is preferred, guest_uuid for backward compatibility)
+        $guestUuid = $request->header('X-Guest-Uuid') ?? $request->header('guest_uuid');
 
         if (empty($guestUuid)) {
             return response()->json([

@@ -385,12 +385,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/fcm-token', [UserController::class, 'updateUserFcmToken']);
     Route::delete('/fcm-token', [UserController::class, 'deleteUserFcmToken']);
 
-    Route::get('/notifications', [NotificationController::class, 'index']);
-    Route::get('/notifications/status', [NotificationController::class, 'status']);
+    Route::get('/notifications/status', [NotificationController::class, 'status'])->middleware('chat.user');
     Route::post('/notifications', [NotificationController::class, 'store'])->middleware('admin');
-    Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
-    Route::patch('/notifications/read-all', [NotificationController::class, 'markAllRead']);
-    Route::post('/notifications/read', [NotificationController::class, 'read']);
+    Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markRead'])->middleware('chat.user');
+    Route::patch('/notifications/read-all', [NotificationController::class, 'markAllRead'])->middleware('chat.user');
+    Route::post('/notifications/read', [NotificationController::class, 'read'])->middleware('chat.user');
     Route::post('/plan-subscriptions', [SubscriptionController::class, 'subscribe']);
     Route::get('/my-subscription', [SubscriptionController::class, 'mySubscription']);
 
@@ -399,6 +398,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/listings/{listing}/renew', [ListingController::class, 'renew']);
 });
+    Route::get('/notifications', [NotificationController::class, 'index'])->middleware('chat.user');
 
 // Chat Routes — accessible by both authenticated users and guests (via guest_uuid header)
 Route::prefix('chat')->middleware('chat.user')->group(function () {
