@@ -30,6 +30,11 @@ class BestAdvertiser extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function sectionRanks()
+    {
+        return $this->hasMany(BestAdvertiserSectionRank::class);
+    }
+
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true)->whereHas('user', function ($q) {

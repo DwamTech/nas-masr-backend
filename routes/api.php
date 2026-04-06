@@ -198,7 +198,7 @@ Route::prefix('admin')
             Route::post('users', [UserController::class, 'storeUser']);
             Route::delete('users/{user}', [UserController::class, 'deleteUser']);
             Route::patch('users/{user}/block', [UserController::class, 'blockedUser']);
-            Route::get('/featured/{userId}', [BestAdvertiserController::class, 'show']);
+            Route::get('/featured/{userId}', [BestAdvertiserController::class, 'show'])->whereNumber('userId');
             Route::post('/featured', [BestAdvertiserController::class, 'store']);
             Route::put('/disable/{bestAdvertiser}', [BestAdvertiserController::class, 'disable']);
             Route::put('/change-password/{user}', [AuthController::class, 'changePass']);
@@ -213,6 +213,12 @@ Route::prefix('admin')
             Route::patch('user-subscriptions/{id}', [UserSubscriptionsController::class, 'update']);
             Route::delete('user-subscriptions/{id}', [UserSubscriptionsController::class, 'destroy']);
             Route::post('user-subscriptions/{id}/add-ads', [UserSubscriptionsController::class, 'addAds']);
+        });
+
+        Route::middleware('dashboard.page:categories.featured_advertisers')->group(function () {
+            Route::get('/featured/sections', [BestAdvertiserController::class, 'sectionsIndex']);
+            Route::get('/featured/sections/{slug}/advertisers', [BestAdvertiserController::class, 'sectionAdvertisers']);
+            Route::post('/featured/sections/{slug}/reorder', [BestAdvertiserController::class, 'reorderSectionAdvertisers']);
         });
 
         Route::middleware('dashboard.page:categories.index,categories.homepage,categories.banners,categories.images,categories.filters')->group(function () {

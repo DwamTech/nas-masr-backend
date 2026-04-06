@@ -45,6 +45,10 @@ return [
         'label' => 'إدارة الفلاتر والقوائم',
         'path' => '/dashboard/filters-lists',
     ],
+    'categories.featured_advertisers' => [
+        'label' => 'إدارة ترتيب المعلنين المميزين',
+        'path' => '/dashboard/featured-advertisers-order',
+    ],
     'users.index' => [
         'label' => 'المستخدمون والموظفون',
         'path' => '/users',

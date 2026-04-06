@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\BestAdvertiser;
+use App\Models\BestAdvertiserSectionRank;
 use App\Models\Category;
 use App\Models\Listing;
 use App\Models\SystemSetting;
@@ -19,6 +20,174 @@ use Illuminate\Support\Facades\Log;
 
 class BestAdvertiserController extends Controller
 {
+    public function sectionsIndex()
+    {
+        $categories = Category::query()
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+
+        $counts = [];
+
+        BestAdvertiser::query()
+            ->with('user:id,status')
+            ->get()
+            ->filter(fn (BestAdvertiser $advertiser) => $this->isActiveFeaturedAdvertiser($advertiser))
+            ->each(function (BestAdvertiser $advertiser) use (&$counts) {
+                foreach ($this->normalizedCategoryIds($advertiser->category_ids) as $categoryId) {
+                    $counts[$categoryId] = ($counts[$categoryId] ?? 0) + 1;
+                }
+            });
+
+        return response()->json([
+            'sections' => $categories->map(function (Category $category) use ($counts) {
+                return $this->formatSectionSummary($category, (int) ($counts[$category->id] ?? 0));
+            })->values(),
+        ]);
+    }
+
+    public function sectionAdvertisers(string $slug)
+    {
+        $category = Category::query()
+            ->where('slug', $slug)
+            ->first();
+
+        if (!$category) {
+            return response()->json([
+                'message' => 'القسم غير موجود',
+            ], 404);
+        }
+
+        $categories = Category::query()
+            ->whereIn('id', $this->collectActiveFeaturedCategoryIds())
+            ->get(['id', 'name', 'slug'])
+            ->keyBy('id');
+
+        $sectionRanks = $this->getSectionRanksMap($category->id);
+
+        $advertisers = BestAdvertiser::query()
+            ->with([
+                'user:id,name,phone,status,profile_image',
+                'sectionRanks' => fn ($query) => $query
+                    ->where('category_id', $category->id)
+                    ->select('id', 'best_advertiser_id', 'category_id', 'rank'),
+            ])
+            ->orderBy('id')
+            ->get()
+            ->filter(fn (BestAdvertiser $advertiser) => $this->belongsToActiveSection($advertiser, $category->id))
+            ->values()
+            ->sortBy(fn (BestAdvertiser $advertiser) => $this->resolveAdvertiserSectionRank($advertiser, $category->id, $sectionRanks))
+            ->values()
+            ->map(function (BestAdvertiser $advertiser) use ($categories, $category, $sectionRanks) {
+                $sectionCategories = collect($this->normalizedCategoryIds($advertiser->category_ids))
+                    ->map(fn (int $categoryId) => $categories->get($categoryId))
+                    ->filter()
+                    ->values()
+                    ->map(fn (Category $sectionCategory) => [
+                        'id' => $sectionCategory->id,
+                        'name' => $sectionCategory->name,
+                        'slug' => $sectionCategory->slug,
+                    ])
+                    ->all();
+
+                return [
+                    'id' => $advertiser->id,
+                    'user_id' => $advertiser->user_id,
+                    'name' => (string) ($advertiser->user?->name ?? 'معلن بدون اسم'),
+                    'phone' => (string) ($advertiser->user?->phone ?? ''),
+                    'profile_image_url' => $advertiser->user?->profile_image_url,
+                    'rank' => (int) $this->resolveAdvertiserSectionRank($advertiser, $category->id, $sectionRanks),
+                    'max_listings' => (int) ($advertiser->max_listings ?? 0),
+                    'categories_count' => count($sectionCategories),
+                    'categories' => $sectionCategories,
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'section' => $this->formatSectionSummary($category, $advertisers->count()),
+            'advertisers' => $advertisers,
+        ]);
+    }
+
+    public function reorderSectionAdvertisers(Request $request, string $slug)
+    {
+        $validated = $request->validate([
+            'advertiser_ids' => ['required', 'array', 'min:1'],
+            'advertiser_ids.*' => ['required', 'integer', 'distinct', 'exists:best_advertiser,id'],
+        ]);
+
+        $category = Category::query()
+            ->where('slug', $slug)
+            ->first();
+
+        if (!$category) {
+            return response()->json([
+                'success' => false,
+                'message' => 'القسم غير موجود',
+            ], 404);
+        }
+
+        $updatedCount = DB::transaction(function () use ($validated, $category) {
+            $sectionAdvertisers = BestAdvertiser::query()
+                ->with(['user:id,status', 'sectionRanks' => fn ($query) => $query
+                    ->where('category_id', $category->id)
+                    ->select('id', 'best_advertiser_id', 'category_id', 'rank')])
+                ->lockForUpdate()
+                ->get()
+                ->filter(fn (BestAdvertiser $advertiser) => $this->belongsToActiveSection($advertiser, $category->id))
+                ->values();
+
+            if ($sectionAdvertisers->isEmpty()) {
+                throw ValidationException::withMessages([
+                    'advertiser_ids' => 'لا يوجد معلنون مميزون في هذا القسم لإعادة ترتيبهم.',
+                ]);
+            }
+
+            $requestedIds = collect($validated['advertiser_ids'])
+                ->map(fn ($id) => (int) $id)
+                ->values();
+
+            $expectedIds = $sectionAdvertisers
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->values();
+
+            if (
+                $requestedIds->count() !== $expectedIds->count()
+                || $requestedIds->diff($expectedIds)->isNotEmpty()
+                || $expectedIds->diff($requestedIds)->isNotEmpty()
+            ) {
+                throw ValidationException::withMessages([
+                    'advertiser_ids' => 'يجب إرسال جميع معلني القسم مرة واحدة لإعادة ترتيبهم.',
+                ]);
+            }
+
+            foreach ($requestedIds as $index => $advertiserId) {
+                BestAdvertiserSectionRank::updateOrCreate(
+                    [
+                        'best_advertiser_id' => $advertiserId,
+                        'category_id' => $category->id,
+                    ],
+                    [
+                        'rank' => $index + 1,
+                    ]
+                );
+            }
+
+            return $sectionAdvertisers->count();
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'تم تحديث ترتيب المعلنين المميزين بنجاح',
+            'data' => [
+                'updated_count' => $updatedCount,
+                'section' => $slug,
+            ],
+        ]);
+    }
 
     public function index(string $section)
     {
@@ -27,10 +196,24 @@ class BestAdvertiserController extends Controller
         $categoryId = $sec->id();
 
         $featured = BestAdvertiser::active()
-            ->whereRaw('JSON_CONTAINS(category_ids, ?)', [json_encode((int) $categoryId)])
-            ->with('user')
-            ->orderBy('rank')
-            ->get();
+            ->with([
+                'user',
+                'sectionRanks' => fn ($query) => $query
+                    ->where('category_id', $categoryId)
+                    ->select('id', 'best_advertiser_id', 'category_id', 'rank'),
+            ])
+            ->get()
+            ->filter(fn (BestAdvertiser $advertiser) => in_array(
+                $categoryId,
+                $this->normalizedCategoryIds($advertiser->category_ids),
+                true
+            ))
+            ->values();
+
+        $sectionRanks = $this->getSectionRanksMap($categoryId);
+        $featured = $featured
+            ->sortBy(fn (BestAdvertiser $advertiser) => $this->resolveAdvertiserSectionRank($advertiser, $categoryId, $sectionRanks))
+            ->values();
 
         $userIds = $featured->pluck('user_id')->map(fn($v) => (int)$v)->all();
 
@@ -197,7 +380,10 @@ class BestAdvertiserController extends Controller
             return (int) (SystemSetting::where('key', 'featured_users_count')->value('value') ?? 8);
         });
 
-        [$ba, $message] = DB::transaction(function () use ($data, $limit) {
+        $normalizedCategoryIds = $this->normalizedCategoryIds($data['category_ids']);
+        $data['category_ids'] = $normalizedCategoryIds;
+
+        [$ba, $message] = DB::transaction(function () use ($data, $limit, $normalizedCategoryIds) {
 
             $ba = BestAdvertiser::where('user_id', $data['user_id'])->lockForUpdate()->first();
 
@@ -218,40 +404,25 @@ class BestAdvertiserController extends Controller
                 }
             }
 
-            // Handle rank logic
-            $newRank = $data['rank'] ?? 0;
-            $oldRank = $ba?->rank ?? null;
+            $payload = $data;
+
+            if (!$ba && !array_key_exists('rank', $payload)) {
+                $payload['rank'] = ((int) BestAdvertiser::query()->max('rank')) + 1;
+            }
+
+            if ($ba && (!array_key_exists('rank', $payload) || $payload['rank'] === null)) {
+                unset($payload['rank']);
+            }
 
             if ($ba) {
-                // Update existing record
-                
-                // If rank changed, shift other records
-                if ($oldRank !== $newRank) {
-                    if ($newRank < $oldRank) {
-                        // Moving up (lower rank number) - shift others down
-                        BestAdvertiser::where('id', '!=', $ba->id)
-                            ->where('rank', '>=', $newRank)
-                            ->where('rank', '<', $oldRank)
-                            ->increment('rank');
-                    } else {
-                        // Moving down (higher rank number) - shift others up
-                        BestAdvertiser::where('id', '!=', $ba->id)
-                            ->where('rank', '>', $oldRank)
-                            ->where('rank', '<=', $newRank)
-                            ->decrement('rank');
-                    }
-                }
-                
-                $ba->update($data);
+                $ba->update($payload);
                 $message = 'Best advertiser updated';
             } else {
-                // New record - shift all records with rank >= newRank down by 1
-                BestAdvertiser::where('rank', '>=', $newRank)
-                    ->increment('rank');
-                
-                $ba = BestAdvertiser::create($data);
+                $ba = BestAdvertiser::create($payload);
                 $message = 'Best advertiser created';
             }
+
+            $this->syncSectionRanks($ba, $normalizedCategoryIds);
 
             return [$ba, $message];
         });
@@ -334,5 +505,122 @@ class BestAdvertiserController extends Controller
             ]);
             return $resolver();
         }
+    }
+
+    private function formatSectionSummary(Category $category, int $featuredAdvertisersCount): array
+    {
+        return [
+            'id' => $category->id,
+            'slug' => $category->slug,
+            'name' => $category->name,
+            'icon' => $category->icon,
+            'icon_url' => $category->icon ? asset('storage/uploads/categories/' . $category->icon) : null,
+            'global_image_url' => $category->global_image_url,
+            'global_image_full_url' => $category->global_image_full_url,
+            'featured_advertisers_count' => $featuredAdvertisersCount,
+        ];
+    }
+
+    private function normalizedCategoryIds($categoryIds): array
+    {
+        if (!is_array($categoryIds)) {
+            return [];
+        }
+
+        return array_values(array_unique(array_map('intval', array_filter($categoryIds, fn ($value) => is_numeric($value)))));
+    }
+
+    private function isActiveFeaturedAdvertiser(BestAdvertiser $advertiser): bool
+    {
+        return (bool) $advertiser->is_active
+            && $advertiser->relationLoaded('user')
+            && $advertiser->user
+            && $advertiser->user->status === 'active';
+    }
+
+    private function belongsToActiveSection(BestAdvertiser $advertiser, int $categoryId): bool
+    {
+        return $this->isActiveFeaturedAdvertiser($advertiser)
+            && in_array($categoryId, $this->normalizedCategoryIds($advertiser->category_ids), true);
+    }
+
+    private function getSectionRanksMap(int $categoryId): array
+    {
+        return BestAdvertiserSectionRank::query()
+            ->where('category_id', $categoryId)
+            ->pluck('rank', 'best_advertiser_id')
+            ->map(fn ($rank) => (int) $rank)
+            ->all();
+    }
+
+    private function resolveAdvertiserSectionRank(BestAdvertiser $advertiser, int $categoryId, array $sectionRanks = []): int
+    {
+        if (isset($sectionRanks[$advertiser->id])) {
+            return (int) $sectionRanks[$advertiser->id];
+        }
+
+        if ($advertiser->relationLoaded('sectionRanks')) {
+            $existingRank = $advertiser->sectionRanks->firstWhere('category_id', $categoryId);
+            if ($existingRank) {
+                return (int) $existingRank->rank;
+            }
+        }
+
+        return (int) ($advertiser->rank > 0 ? $advertiser->rank : 1000000 + (int) $advertiser->id);
+    }
+
+    private function syncSectionRanks(BestAdvertiser $bestAdvertiser, array $categoryIds): void
+    {
+        $normalizedCategoryIds = $this->normalizedCategoryIds($categoryIds);
+
+        if (empty($normalizedCategoryIds)) {
+            BestAdvertiserSectionRank::query()
+                ->where('best_advertiser_id', $bestAdvertiser->id)
+                ->delete();
+
+            return;
+        }
+
+        BestAdvertiserSectionRank::query()
+            ->where('best_advertiser_id', $bestAdvertiser->id)
+            ->whereNotIn('category_id', $normalizedCategoryIds)
+            ->delete();
+
+        $existingCategoryIds = BestAdvertiserSectionRank::query()
+            ->where('best_advertiser_id', $bestAdvertiser->id)
+            ->pluck('category_id')
+            ->map(fn ($categoryId) => (int) $categoryId)
+            ->all();
+
+        foreach ($normalizedCategoryIds as $categoryId) {
+            if (in_array($categoryId, $existingCategoryIds, true)) {
+                continue;
+            }
+
+            $nextRank = (int) BestAdvertiserSectionRank::query()
+                ->where('category_id', $categoryId)
+                ->max('rank');
+
+            BestAdvertiserSectionRank::create([
+                'best_advertiser_id' => $bestAdvertiser->id,
+                'category_id' => $categoryId,
+                'rank' => $nextRank + 1,
+            ]);
+        }
+    }
+
+    private function collectActiveFeaturedCategoryIds(): array
+    {
+        $categoryIds = [];
+
+        BestAdvertiser::query()
+            ->with('user:id,status')
+            ->get()
+            ->filter(fn (BestAdvertiser $advertiser) => $this->isActiveFeaturedAdvertiser($advertiser))
+            ->each(function (BestAdvertiser $advertiser) use (&$categoryIds) {
+                $categoryIds = array_merge($categoryIds, $this->normalizedCategoryIds($advertiser->category_ids));
+            });
+
+        return array_values(array_unique($categoryIds));
     }
 }
