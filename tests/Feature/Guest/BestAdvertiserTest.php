@@ -3,6 +3,7 @@
 namespace Tests\Feature\Guest;
 
 use App\Models\BestAdvertiser;
+use App\Models\BestAdvertiserSectionRank;
 use App\Models\Category;
 use App\Models\Listing;
 use App\Models\SystemSetting;
@@ -455,6 +456,126 @@ class BestAdvertiserTest extends GuestTestCase
         // Third should be rank 2 (price 2000)
         $this->assertEquals(2, $listings[2]['rank']);
         $this->assertEquals(2000, $listings[2]['price']);
+    }
+
+    /**
+     * Test that featured advertisers are ordered by section-specific ranks
+     * and the same advertiser can have different positions across sections.
+     */
+    public function test_featured_advertisers_follow_section_specific_ordering_across_sections(): void
+    {
+        $cars = $this->createActiveCategory([
+            'slug' => 'section-order-cars',
+            'name' => 'سيارات',
+            'sort_order' => 1,
+        ]);
+        $jobs = $this->createActiveCategory([
+            'slug' => 'section-order-jobs',
+            'name' => 'وظائف',
+            'sort_order' => 2,
+        ]);
+
+        $firstUser = User::factory()->create([
+            'status' => 'active',
+            'name' => 'المعلن الأول',
+        ]);
+        $secondUser = User::factory()->create([
+            'status' => 'active',
+            'name' => 'المعلن الثاني',
+        ]);
+        $thirdUser = User::factory()->create([
+            'status' => 'active',
+            'name' => 'المعلن الثالث',
+        ]);
+
+        $firstAdvertiser = $this->createBestAdvertiser($firstUser, [$cars->id, $jobs->id], [
+            'rank' => 3,
+        ]);
+        $secondAdvertiser = $this->createBestAdvertiser($secondUser, [$cars->id, $jobs->id], [
+            'rank' => 1,
+        ]);
+        $thirdAdvertiser = $this->createBestAdvertiser($thirdUser, [$cars->id, $jobs->id], [
+            'rank' => 2,
+        ]);
+
+        BestAdvertiserSectionRank::insert([
+            [
+                'best_advertiser_id' => $firstAdvertiser->id,
+                'category_id' => $cars->id,
+                'rank' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'best_advertiser_id' => $secondAdvertiser->id,
+                'category_id' => $cars->id,
+                'rank' => 2,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'best_advertiser_id' => $thirdAdvertiser->id,
+                'category_id' => $cars->id,
+                'rank' => 3,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'best_advertiser_id' => $thirdAdvertiser->id,
+                'category_id' => $jobs->id,
+                'rank' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'best_advertiser_id' => $firstAdvertiser->id,
+                'category_id' => $jobs->id,
+                'rank' => 2,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'best_advertiser_id' => $secondAdvertiser->id,
+                'category_id' => $jobs->id,
+                'rank' => 3,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        foreach ([
+            [$cars, $firstUser, 1000],
+            [$cars, $secondUser, 2000],
+            [$cars, $thirdUser, 3000],
+            [$jobs, $firstUser, 4000],
+            [$jobs, $secondUser, 5000],
+            [$jobs, $thirdUser, 6000],
+        ] as [$category, $user, $price]) {
+            $this->createValidListing($category, [
+                'user_id' => $user->id,
+                'price' => $price,
+            ]);
+        }
+
+        $carsResponse = $this->guestGet('/api/the-best/section-order-cars');
+        $jobsResponse = $this->guestGet('/api/the-best/section-order-jobs');
+
+        $carsResponse->assertOk();
+        $jobsResponse->assertOk();
+
+        $carsAdvertisers = $carsResponse->json('advertisers');
+        $jobsAdvertisers = $jobsResponse->json('advertisers');
+
+        $this->assertCount(3, $carsAdvertisers);
+        $this->assertCount(3, $jobsAdvertisers);
+
+        $this->assertSame('المعلن الأول', $carsAdvertisers[0]['user']['name']);
+        $this->assertSame('المعلن الثاني', $carsAdvertisers[1]['user']['name']);
+        $this->assertSame('المعلن الثالث', $carsAdvertisers[2]['user']['name']);
+
+        $this->assertSame('المعلن الثالث', $jobsAdvertisers[0]['user']['name']);
+        $this->assertSame('المعلن الأول', $jobsAdvertisers[1]['user']['name']);
+        $this->assertSame('المعلن الثاني', $jobsAdvertisers[2]['user']['name']);
     }
 
     /**

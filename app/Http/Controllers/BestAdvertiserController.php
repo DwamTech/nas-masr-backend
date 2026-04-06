@@ -78,8 +78,24 @@ class BestAdvertiserController extends Controller
             ->filter(fn (BestAdvertiser $advertiser) => $this->belongsToActiveSection($advertiser, $category->id))
             ->values()
             ->sortBy(fn (BestAdvertiser $advertiser) => $this->resolveAdvertiserSectionRank($advertiser, $category->id, $sectionRanks))
-            ->values()
-            ->map(function (BestAdvertiser $advertiser) use ($categories, $category, $sectionRanks) {
+            ->values();
+
+        $maxVisibleListings = $this->safeRemember('settings:featured_user_max_ads', now()->addHours(6), function () {
+            return (int) (SystemSetting::where('key', 'featured_user_max_ads')->value('value') ?? 8);
+        });
+
+        $visibleListingsCountByUser = Listing::query()
+            ->selectRaw('user_id, COUNT(*) as aggregate')
+            ->where('category_id', $category->id)
+            ->where('status', 'Valid')
+            ->whereIn('user_id', $advertisers->pluck('user_id')->all())
+            ->groupBy('user_id')
+            ->pluck('aggregate', 'user_id')
+            ->map(fn ($count) => min((int) $count, $maxVisibleListings))
+            ->all();
+
+        $advertisers = $advertisers
+            ->map(function (BestAdvertiser $advertiser) use ($categories, $category, $sectionRanks, $visibleListingsCountByUser) {
                 $sectionCategories = collect($this->normalizedCategoryIds($advertiser->category_ids))
                     ->map(fn (int $categoryId) => $categories->get($categoryId))
                     ->filter()
@@ -99,6 +115,8 @@ class BestAdvertiserController extends Controller
                     'profile_image_url' => $advertiser->user?->profile_image_url,
                     'rank' => (int) $this->resolveAdvertiserSectionRank($advertiser, $category->id, $sectionRanks),
                     'max_listings' => (int) ($advertiser->max_listings ?? 0),
+                    'current_section_visible_listings_count' => (int) ($visibleListingsCountByUser[$advertiser->user_id] ?? 0),
+                    'has_visible_listings_in_section' => (int) ($visibleListingsCountByUser[$advertiser->user_id] ?? 0) > 0,
                     'categories_count' => count($sectionCategories),
                     'categories' => $sectionCategories,
                 ];

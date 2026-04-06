@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\BestAdvertiser;
 use App\Models\BestAdvertiserSectionRank;
 use App\Models\Category;
+use App\Models\Listing;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -103,6 +104,44 @@ class FeaturedAdvertiserOrderingTest extends TestCase
             ->assertJsonPath('advertisers.0.id', $first->id)
             ->assertJsonPath('advertisers.1.id', $second->id)
             ->assertJsonPath('advertisers.1.categories_count', 2);
+    }
+
+    public function test_section_advertisers_endpoint_includes_current_section_visibility_info(): void
+    {
+        [$cars, $jobs] = $this->seedSections();
+        [$admin] = $this->authorizedUsers();
+
+        $visibleAdvertiser = $this->createFeaturedAdvertiser('ظاهر', '01000000061', [$cars->id, $jobs->id], 1, [
+            $cars->id => 1,
+            $jobs->id => 2,
+        ]);
+        $hiddenAdvertiser = $this->createFeaturedAdvertiser('بدون إعلانات', '01000000062', [$cars->id], 2, [
+            $cars->id => 2,
+        ]);
+
+        Listing::factory()->create([
+            'user_id' => $visibleAdvertiser->user_id,
+            'category_id' => $cars->id,
+            'status' => 'Valid',
+            'expire_at' => now()->addDays(30),
+            'published_at' => now(),
+        ]);
+        Listing::factory()->create([
+            'user_id' => $visibleAdvertiser->user_id,
+            'category_id' => $jobs->id,
+            'status' => 'Valid',
+            'expire_at' => now()->addDays(30),
+            'published_at' => now(),
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->getJson('/api/admin/featured/sections/cars/advertisers')
+            ->assertOk();
+
+        $this->assertSame(1, $response->json('advertisers.0.current_section_visible_listings_count'));
+        $this->assertTrue($response->json('advertisers.0.has_visible_listings_in_section'));
+        $this->assertSame(0, $response->json('advertisers.1.current_section_visible_listings_count'));
+        $this->assertFalse($response->json('advertisers.1.has_visible_listings_in_section'));
     }
 
     public function test_reordering_section_advertisers_reorders_only_that_sections_slots_and_normalizes_ranks(): void
