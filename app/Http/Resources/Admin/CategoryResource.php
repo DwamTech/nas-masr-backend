@@ -23,6 +23,7 @@ class CategoryResource extends JsonResource
                 ? asset('storage/uploads/categories/' . $this->icon)
                 : null,
             'is_active'=>$this->is_active,
+            'show_featured_advertisers' => $this->show_featured_advertisers ?? true,
             'is_global_image_active' => $this->is_global_image_active ?? false,
             'global_image_url' => $this->global_image_url,
             'global_image_full_url' => $this->global_image_full_url,

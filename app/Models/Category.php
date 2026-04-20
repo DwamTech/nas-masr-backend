@@ -17,12 +17,14 @@ class Category extends Model
         'default_image',
         'sort_order',
         'is_active',
+        'show_featured_advertisers',
         'is_global_image_active',
         'global_image_url',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'show_featured_advertisers' => 'boolean',
         'is_global_image_active' => 'boolean',
     ];
     protected $appends = ['icon_url', 'default_image_url', 'global_image_full_url'];

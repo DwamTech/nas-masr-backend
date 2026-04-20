@@ -81,6 +81,7 @@ class CategoryTest extends GuestTestCase
                     'name',
                     'icon_url',
                     'is_active',
+                    'show_featured_advertisers',
                 ]
             ]
         ]);
@@ -93,6 +94,7 @@ class CategoryTest extends GuestTestCase
         $this->assertArrayHasKey('name', $data[0]);
         $this->assertArrayHasKey('icon_url', $data[0]);
         $this->assertArrayHasKey('is_active', $data[0]);
+        $this->assertArrayHasKey('show_featured_advertisers', $data[0]);
     }
 
     /**

@@ -46,8 +46,8 @@ return [
         'path' => '/dashboard/filters-lists',
     ],
     'categories.featured_advertisers' => [
-        'label' => 'إدارة ترتيب المعلنين المميزين',
-        'path' => '/dashboard/featured-advertisers-order',
+        'label' => 'التحكم في أفضل المعلنين',
+        'path' => '/dashboard/featured-advertisers-control',
     ],
     'users.index' => [
         'label' => 'المستخدمون والموظفون',

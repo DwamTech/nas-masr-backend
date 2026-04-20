@@ -222,6 +222,7 @@ Route::prefix('admin')
             Route::get('/featured/sections', [BestAdvertiserController::class, 'sectionsIndex']);
             Route::get('/featured/sections/{slug}/advertisers', [BestAdvertiserController::class, 'sectionAdvertisers']);
             Route::post('/featured/sections/{slug}/reorder', [BestAdvertiserController::class, 'reorderSectionAdvertisers']);
+            Route::patch('/featured/sections/{category}/visibility', [categoryController::class, 'toggleFeaturedAdvertisersVisibility']);
         });
 
         Route::middleware('dashboard.page:categories.index,categories.homepage,categories.banners,categories.images,categories.filters')->group(function () {

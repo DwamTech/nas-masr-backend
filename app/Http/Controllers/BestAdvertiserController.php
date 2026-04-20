@@ -212,6 +212,14 @@ class BestAdvertiserController extends Controller
         Listing::autoExpire();
         $sec = Section::fromSlug($section);
         $categoryId = $sec->id();
+        $category = Category::query()->find($categoryId);
+
+        if ($category && !$category->show_featured_advertisers) {
+            return response()->json([
+                'advertisers' => [],
+                'show_featured_advertisers' => false,
+            ]);
+        }
 
         $featured = BestAdvertiser::active()
             ->with([
@@ -535,6 +543,7 @@ class BestAdvertiserController extends Controller
             'icon_url' => $category->icon ? asset('storage/uploads/categories/' . $category->icon) : null,
             'global_image_url' => $category->global_image_url,
             'global_image_full_url' => $category->global_image_full_url,
+            'show_featured_advertisers' => (bool) ($category->show_featured_advertisers ?? true),
             'featured_advertisers_count' => $featuredAdvertisersCount,
         ];
     }

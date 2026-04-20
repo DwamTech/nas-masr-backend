@@ -45,6 +45,7 @@ class FeaturedAdvertiserOrderingTest extends TestCase
             ->getJson('/api/admin/featured/sections')
             ->assertOk()
             ->assertJsonPath('sections.0.slug', 'cars')
+            ->assertJsonPath('sections.0.show_featured_advertisers', true)
             ->assertJsonPath('sections.0.featured_advertisers_count', 2)
             ->assertJsonPath('sections.1.slug', 'jobs')
             ->assertJsonPath('sections.1.featured_advertisers_count', 1);
@@ -79,6 +80,38 @@ class FeaturedAdvertiserOrderingTest extends TestCase
         $this->actingAs($employee)
             ->getJson('/api/admin/featured/sections/cars/advertisers')
             ->assertStatus(403);
+    }
+
+    public function test_admin_can_toggle_featured_advertisers_visibility_per_section(): void
+    {
+        [$cars] = $this->seedSections();
+        [$admin] = $this->authorizedUsers();
+
+        $this->actingAs($admin)
+            ->patchJson("/api/admin/featured/sections/{$cars->id}/visibility", [
+                'show_featured_advertisers' => false,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.show_featured_advertisers', false);
+
+        $this->assertDatabaseHas('categories', [
+            'id' => $cars->id,
+            'show_featured_advertisers' => false,
+        ]);
+
+        $this->actingAs($admin)
+            ->getJson('/api/admin/featured/sections')
+            ->assertOk()
+            ->assertJsonPath('sections.0.show_featured_advertisers', false);
+
+        $this->getJson('/api/categories')
+            ->assertOk()
+            ->assertJsonPath('data.0.show_featured_advertisers', false);
+
+        $this->getJson('/api/the-best/cars')
+            ->assertOk()
+            ->assertJsonPath('show_featured_advertisers', false)
+            ->assertJsonPath('advertisers', []);
     }
 
     public function test_section_advertisers_endpoint_returns_sorted_advertisers_for_requested_section(): void
@@ -225,6 +258,7 @@ class FeaturedAdvertiserOrderingTest extends TestCase
             'slug' => 'cars',
             'title' => 'سيارات',
             'is_active' => true,
+            'show_featured_advertisers' => true,
             'sort_order' => 1,
         ]);
 
@@ -233,6 +267,7 @@ class FeaturedAdvertiserOrderingTest extends TestCase
             'slug' => 'jobs',
             'title' => 'وظائف',
             'is_active' => true,
+            'show_featured_advertisers' => true,
             'sort_order' => 2,
         ]);
 

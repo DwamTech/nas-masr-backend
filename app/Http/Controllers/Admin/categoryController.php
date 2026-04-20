@@ -102,6 +102,24 @@ class categoryController extends Controller
         ]);
     }
 
+    public function toggleFeaturedAdvertisersVisibility(Request $request, Category $category)
+    {
+        $validated = $request->validate([
+            'show_featured_advertisers' => ['required', 'boolean'],
+        ]);
+
+        $category->update([
+            'show_featured_advertisers' => (bool) $validated['show_featured_advertisers'],
+        ]);
+
+        return response()->json([
+            'message' => $category->show_featured_advertisers
+                ? 'تم تشغيل أفضل المعلنين لهذا القسم'
+                : 'تم تعطيل أفضل المعلنين لهذا القسم',
+            'data' => (new CategoryResource($category->fresh()))->resolve(),
+        ]);
+    }
+
     public function usageReport()
     {
         $categories = Category::withCount('listings')->get();
