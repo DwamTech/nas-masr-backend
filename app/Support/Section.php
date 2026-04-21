@@ -108,7 +108,7 @@ final class Section
             'tools',
             'missing',
             'spare-parts',
-            // 'jobs',
+            'jobs',
         ], true);
     }
 
@@ -133,7 +133,8 @@ final class Section
     }
     public function rules(): array
     {
-        $requiresTitle = $this->slug === 'spare-parts' || $this->supportsSections();
+        $requiresTitle = $this->slug === 'spare-parts'
+            || ($this->supportsSections() && $this->slug !== 'jobs');
 
         $priceRules = ($this->slug === 'missing' || $this->slug === 'jobs')
             ? ['nullable', 'numeric', 'min:0']
