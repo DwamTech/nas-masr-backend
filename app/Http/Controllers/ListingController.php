@@ -26,6 +26,7 @@ use App\Models\CategoryPlanPrice;
 use App\Models\CategoryBanner;
 use App\Services\AdminNotificationService;
 use App\Services\NotificationService;
+use Illuminate\Validation\ValidationException;
 
 
 class ListingController extends Controller
@@ -446,6 +447,8 @@ class ListingController extends Controller
             }
         }
 
+        $this->validateWhatsappConfig($data, $user);
+
         $listing = $service->create($sec, $data, $user->id);
 
         // Only change role if not admin (don't downgrade admin to advertiser)
@@ -760,6 +763,10 @@ class ListingController extends Controller
 
         $column = $data['type'] === 'whatsapp' ? 'whatsapp_clicks' : 'call_clicks';
         $listing->increment($column, 1);
+        $resolvedWhatsappPhone = null;
+        if ($data['type'] === 'whatsapp') {
+            $resolvedWhatsappPhone = $this->resolveNextWhatsappPhone($listing);
+        }
         $listing->refresh();
 
         return response()->json([
@@ -768,12 +775,113 @@ class ListingController extends Controller
             'type' => $data['type'],
             'whatsapp_clicks' => (int) ($listing->whatsapp_clicks ?? 0),
             'call_clicks' => (int) ($listing->call_clicks ?? 0),
+            'resolved_whatsapp_phone' => $resolvedWhatsappPhone,
         ]);
     }
 
     protected function userIsAdmin($user): bool
     {
         return $user->role == 'admin';
+    }
+
+    protected function validateWhatsappConfig(array &$data, $user, ?Listing $listing = null): void
+    {
+        $mode = strtolower((string) ($data['whatsapp_mode'] ?? ($listing?->whatsapp_mode ?? 'single')));
+        if (!in_array($mode, ['single', 'group'], true)) {
+            $mode = 'single';
+        }
+
+        $data['whatsapp_mode'] = $mode;
+
+        if ($mode === 'group') {
+            $ids = $data['whatsapp_group_number_ids'] ?? ($listing?->whatsapp_group_number_ids ?? []);
+            $ids = collect(is_array($ids) ? $ids : [])
+                ->map(fn ($id) => (int) $id)
+                ->filter(fn ($id) => $id > 0)
+                ->unique()
+                ->values()
+                ->all();
+
+            if (empty($ids)) {
+                throw ValidationException::withMessages([
+                    'whatsapp_group_number_ids' => ['اختر رقم واتساب واحدًا على الأقل من المجموعة.'],
+                ]);
+            }
+
+            $availableIds = collect($user->whatsapp_numbers_group ?? [])
+                ->map(fn ($item) => (int) ($item['id'] ?? 0))
+                ->filter(fn ($id) => $id > 0)
+                ->values()
+                ->all();
+
+            $invalidIds = array_values(array_diff($ids, $availableIds));
+            if (!empty($invalidIds)) {
+                throw ValidationException::withMessages([
+                    'whatsapp_group_number_ids' => ['بعض أرقام الواتساب المختارة لم تعد موجودة في حسابك.'],
+                ]);
+            }
+
+            $previousIds = collect($listing?->whatsapp_group_number_ids ?? [])
+                ->map(fn ($id) => (int) $id)
+                ->filter(fn ($id) => $id > 0)
+                ->values()
+                ->all();
+
+            $data['whatsapp_group_number_ids'] = $ids;
+            $data['whatsapp_phone'] = null;
+
+            if ($listing === null || $previousIds !== $ids || ($listing->whatsapp_mode ?? 'single') !== 'group') {
+                $data['current_whatsapp_group_index'] = 0;
+            }
+
+            return;
+        }
+
+        $data['whatsapp_group_number_ids'] = [];
+        $data['current_whatsapp_group_index'] = 0;
+    }
+
+    protected function resolveNextWhatsappPhone(Listing $listing): ?string
+    {
+        if (($listing->whatsapp_mode ?? 'single') !== 'group') {
+            return $listing->whatsapp_phone ?: $listing->contact_phone;
+        }
+
+        $user = $listing->relationLoaded('user') ? $listing->user : $listing->user()->first();
+        if (!$user) {
+            return $listing->whatsapp_phone ?: $listing->contact_phone;
+        }
+
+        $selectedIds = collect($listing->whatsapp_group_number_ids ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->values();
+
+        if ($selectedIds->isEmpty()) {
+            return $listing->whatsapp_phone ?: $listing->contact_phone;
+        }
+
+        $available = collect($user->whatsapp_numbers_group ?? [])
+            ->filter(function ($item) use ($selectedIds) {
+                $id = (int) ($item['id'] ?? 0);
+                $number = trim((string) ($item['number'] ?? ''));
+                return $id > 0 && $number !== '' && $selectedIds->contains($id);
+            })
+            ->values();
+
+        if ($available->isEmpty()) {
+            return $listing->whatsapp_phone ?: $listing->contact_phone;
+        }
+
+        $index = (int) ($listing->current_whatsapp_group_index ?? 0);
+        $chosen = $available[$index % $available->count()];
+        $nextIndex = ($index + 1) % $available->count();
+
+        $listing->forceFill([
+            'current_whatsapp_group_index' => $nextIndex,
+        ])->save();
+
+        return trim((string) ($chosen['number'] ?? '')) ?: ($listing->whatsapp_phone ?: $listing->contact_phone);
     }
 
     /**
@@ -976,6 +1084,8 @@ class ListingController extends Controller
             }
             $data['images'] = $stored;
         }
+
+        $this->validateWhatsappConfig($data, $user, $listing);
 
         $listing = $service->update($sec, $listing, $data);
 

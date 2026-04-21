@@ -69,6 +69,10 @@ class UserController extends Controller
             'lng' => ['sometimes', 'nullable', 'numeric'],
             'referral_code' => ['sometimes', 'nullable', 'string'],
             'address' => ['sometimes', 'nullable', 'string'],
+            'whatsapp_numbers_group' => ['sometimes', 'array'],
+            'whatsapp_numbers_group.*.id' => ['nullable', 'integer'],
+            'whatsapp_numbers_group.*.number' => ['required', 'string', 'max:20'],
+            'whatsapp_numbers_group.*.label' => ['nullable', 'string', 'max:120'],
         ]);
 
         // Validate referral_code if provided
@@ -100,6 +104,12 @@ class UserController extends Controller
 
             // Update user's referral_code
             $validated['referral_code'] = $agentClient->user_id;
+        }
+
+        if (array_key_exists('whatsapp_numbers_group', $validated)) {
+            $validated['whatsapp_numbers_group'] = $this->normalizeWhatsappNumbersGroup(
+                $validated['whatsapp_numbers_group']
+            );
         }
 
         $user->update($validated);
@@ -918,8 +928,46 @@ class UserController extends Controller
     {
         $data = $user->toArray();
         $data['saved_locations'] = $this->savedLocationPayloads($user);
+        $data['whatsapp_numbers_group'] = $this->normalizeWhatsappNumbersGroup(
+            $user->whatsapp_numbers_group ?? []
+        );
 
         return $data;
+    }
+
+    private function normalizeWhatsappNumbersGroup(array $items): array
+    {
+        $nextId = 1;
+        $normalized = [];
+
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $number = trim((string) ($item['number'] ?? ''));
+            if ($number === '') {
+                continue;
+            }
+
+            $id = isset($item['id']) ? (int) $item['id'] : 0;
+            if ($id <= 0) {
+                while (collect($normalized)->contains(fn ($row) => (int) ($row['id'] ?? 0) === $nextId)) {
+                    $nextId++;
+                }
+                $id = $nextId++;
+            }
+
+            $label = isset($item['label']) ? trim((string) $item['label']) : null;
+
+            $normalized[] = [
+                'id' => $id,
+                'number' => $number,
+                'label' => $label !== '' ? $label : null,
+            ];
+        }
+
+        return array_values($normalized);
     }
 
     private function savedLocationPayloads(User $user): array

@@ -42,6 +42,7 @@ class User extends Authenticatable
         'role',
         'allowed_dashboard_pages',
         'profile_image',
+        'whatsapp_numbers_group',
         'is_representative',
         'fcm_token',
         'guest_uuid',
@@ -72,6 +73,7 @@ class User extends Authenticatable
             'receive_external_notif' => 'boolean',
             'is_representative' => 'boolean',
             'allowed_dashboard_pages' => 'array',
+            'whatsapp_numbers_group' => 'array',
         ];
     }
 

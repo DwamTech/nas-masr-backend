@@ -34,6 +34,9 @@ class Listing extends Model
         'publish_via',
         'contact_phone',
         'whatsapp_phone',
+        'whatsapp_mode',
+        'whatsapp_group_number_ids',
+        'current_whatsapp_group_index',
         'make_id',
         'model_id',
         'rank',
@@ -62,6 +65,8 @@ class Listing extends Model
         'whatsapp_clicks' => 'int',
         'call_clicks' => 'int',
         'isPayment' => 'boolean',
+        'whatsapp_group_number_ids' => 'array',
+        'current_whatsapp_group_index' => 'int',
 
     ];
 

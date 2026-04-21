@@ -96,6 +96,8 @@ class ListingResource extends JsonResource
 
             'contact_phone' => $this->contact_phone,
             'whatsapp_phone' => $this->whatsapp_phone,
+            'whatsapp_mode' => $this->whatsapp_mode ?? 'single',
+            'whatsapp_group_number_ids' => $this->whatsapp_group_number_ids ?? [],
 
             'make_id' => $this->when($supportsMakeModel, $this->make_id),
             'make' => $this->when($supportsMakeModel, $makeName),
