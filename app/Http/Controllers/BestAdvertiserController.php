@@ -402,6 +402,20 @@ class BestAdvertiserController extends Controller
             ], 422);
         }
 
+        $hiddenCategories = Category::whereIn('id', $data['category_ids'])
+            ->where('show_featured_advertisers', false)
+            ->get(['id', 'name']);
+
+        if ($hiddenCategories->isNotEmpty()) {
+            return response()->json([
+                'message' => 'لا يمكن تعيين معلن مميز في قسم تم تعطيل صفحة المعلنين المميزين له.',
+                'disabled_categories' => $hiddenCategories->map(fn (Category $category) => [
+                    'id' => $category->id,
+                    'name' => $category->name,
+                ])->values(),
+            ], 422);
+        }
+
         $limit = $this->safeRememberForever('settings:featured_users_count', function () {
             return (int) (SystemSetting::where('key', 'featured_users_count')->value('value') ?? 8);
         });
@@ -648,6 +662,17 @@ class BestAdvertiserController extends Controller
                 $categoryIds = array_merge($categoryIds, $this->normalizedCategoryIds($advertiser->category_ids));
             });
 
-        return array_values(array_unique($categoryIds));
+        $categoryIds = array_values(array_unique($categoryIds));
+
+        if (empty($categoryIds)) {
+            return [];
+        }
+
+        return Category::query()
+            ->whereIn('id', $categoryIds)
+            ->where('show_featured_advertisers', true)
+            ->pluck('id')
+            ->map(fn ($categoryId) => (int) $categoryId)
+            ->all();
     }
 }
