@@ -143,7 +143,7 @@ class CategoryFieldsSeeder extends Seeder
                 'field_name' => 'contact_via_type',
                 'display_name' => 'نوع حقل التواصل عبر',
                 'type' => 'string',
-                'options' => ['البريد الإلكتروني', 'واتساب', 'اتصال'],
+                'options' => ['الإيميل', 'واتساب', 'اتصال'],
                 'required' => true,
                 'filterable' => false,
                 'sort_order' => 4,

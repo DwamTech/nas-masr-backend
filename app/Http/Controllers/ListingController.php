@@ -54,7 +54,7 @@ class ListingController extends Controller
             ->pluck('field_name')
             ->all();
 
-        $with = ['attributes', 'governorate', 'city'];
+        $with = ['attributes', 'governorate', 'city', 'user:id,name'];
         if ($sec->supportsMakeModel()) {
             $with[] = 'make';
             $with[] = 'model';
@@ -204,6 +204,9 @@ class ListingController extends Controller
                 'id' => $item->id,
                 'lat' => $item->lat,
                 'lng' => $item->lng,
+                'seller_name' => ($item->relationLoaded('user') && $item->user)
+                    ? $item->user->name
+                    : null,
 
                 // الكاتيجري
                 'category' => $categorySlug,   // slug
@@ -962,7 +965,7 @@ class ListingController extends Controller
         $query = Listing::query()
             ->where($baseFilter)
             ->where($searchCondition)
-            ->with(['governorate', 'city', 'attributes', 'make', 'model', 'mainSection', 'subSection'])
+            ->with(['governorate', 'city', 'attributes', 'make', 'model', 'mainSection', 'subSection', 'user:id,name'])
             ->orderByDesc('created_at');
 
         // Get paginated results
@@ -1032,6 +1035,7 @@ class ListingController extends Controller
                 'model' => $item->model?->name,
                 'main_section' => $item->mainSection?->name,
                 'sub_section' => $item->subSection?->name,
+                'seller_name' => $item->user?->name,
                 'attributes' => $attrs,
                 'created_at' => $item->created_at,
             ];
