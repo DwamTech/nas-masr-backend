@@ -140,13 +140,23 @@ class CategoryFieldsSeeder extends Seeder
             ],
             [
                 'category_slug' => 'jobs',
+                'field_name' => 'contact_via_type',
+                'display_name' => 'نوع حقل التواصل عبر',
+                'type' => 'string',
+                'options' => ['البريد الإلكتروني', 'واتساب', 'اتصال'],
+                'required' => true,
+                'filterable' => false,
+                'sort_order' => 4,
+            ],
+            [
+                'category_slug' => 'jobs',
                 'field_name' => 'contact_via',
                 'display_name' => 'التواصل عبر',
                 'type' => 'string',
                 'options' => [],
                 'required' => true,
                 'filterable' => false,
-                'sort_order' => 4,
+                'sort_order' => 5,
             ],
         ];
 
