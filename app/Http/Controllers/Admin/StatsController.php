@@ -209,21 +209,40 @@ class StatsController extends Controller
     public function usersSummary(Request $request): JsonResponse
     {
         $perPage = (int) $request->query('per_page', 20);
-        $role = $request->query('role'); // admin, user, reviewer, advertiser
+        $role = trim((string) $request->query('role', '')); // admin, user, reviewer, advertiser, delegates
         $status = $request->query('status'); // active, blocked
         $q = trim((string) $request->query('q', ''));
         $viewer = $request->user();
         $viewerIsAdmin = $viewer && $viewer->isAdmin();
+        $roleValues = $this->resolveUsersSummaryRoleFilter($role);
 
         $users = User::query()
             ->when(!$viewerIsAdmin, fn ($qr) => $qr->whereNotIn('role', User::privilegedDashboardRoles()))
-            ->when($role, fn($qr) => $qr->where('role', $role))
+            ->when($roleValues !== null, function ($qr) use ($roleValues) {
+                if (in_array('__representative__', $roleValues, true)) {
+                    $roles = array_values(array_filter($roleValues, fn ($value) => $value !== '__representative__'));
+                    $qr->where(function ($qq) use ($roles) {
+                        if (!empty($roles)) {
+                            $qq->whereIn('role', $roles);
+                        }
+                        $qq->orWhere('is_representative', true);
+                    });
+                } elseif (!empty($roleValues)) {
+                    $qr->whereIn('role', $roleValues);
+                }
+            })
             ->when($status, fn($qr) => $qr->where('status', $status))
             ->when($q !== '', function ($qr) use ($q) {
-                $qr->where(function ($qq) use ($q) {
-                    $qq->where('name', 'like', "%$q%")
-                        ->orWhere('phone', 'like', "%$q%")
-                        ->orWhere('referral_code', 'like', "%$q%");
+                $tokens = $this->usersSummarySearchTokens($q);
+                if (empty($tokens)) {
+                    return;
+                }
+                $qr->where(function ($qq) use ($tokens) {
+                    foreach ($tokens as $token) {
+                        $qq->orWhere(function ($tokenQuery) use ($token) {
+                            $this->applyUsersSummaryTokenSearch($tokenQuery, $token);
+                        });
+                    }
                 });
             })
             ->withCount('listings')
@@ -250,6 +269,7 @@ class StatsController extends Controller
                 'phone_verified' => (bool) $u->otp_verified,
                 'allowed_dashboard_pages' => $u->dashboardPageKeys(),
                 'profile_image_url' => $u->profile_image_url,
+                'show_ad_update_button' => (bool) ($u->show_ad_update_button ?? true),
             ];
         })->values();
 
@@ -261,6 +281,123 @@ class StatsController extends Controller
                 'last_page' => $users->lastPage(),
             ],
             'users' => $data,
+        ]);
+    }
+
+    private function resolveUsersSummaryRoleFilter(string $role): ?array
+    {
+        return match ($role) {
+            'users', 'user' => ['user'],
+            'advertisers', 'advertiser' => ['advertiser'],
+            'employees', 'employee' => ['employee'],
+            'delegates', 'delegate', 'representative' => ['delegate', 'representative', '__representative__'],
+            'admins', 'admin' => ['admin'],
+            'reviewers', 'reviewer' => ['reviewer'],
+            '', 'all' => null,
+            default => [$role],
+        };
+    }
+
+    private function usersSummarySearchTokens(string $query): array
+    {
+        $normalized = $this->normalizeUsersSummarySearchText($query);
+        $tokens = preg_split('/\s+/u', $normalized, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $compactDigits = preg_replace('/\D+/', '', $this->normalizeUsersSummaryDigits($query));
+
+        if ($compactDigits !== '') {
+            $tokens[] = $compactDigits;
+        }
+
+        foreach ([
+            'مستخدم' => 'user',
+            'مستخدمين' => 'user',
+            'معلن' => 'advertiser',
+            'معلنين' => 'advertiser',
+            'مندوب' => 'representative',
+            'مناديب' => 'representative',
+            'موظف' => 'employee',
+            'موظفين' => 'employee',
+            'مشرف' => 'admin',
+            'ادمن' => 'admin',
+            'مراجع' => 'reviewer',
+            'نشط' => 'active',
+            'فعال' => 'active',
+            'محظور' => 'blocked',
+            'موقوف' => 'blocked',
+        ] as $label => $value) {
+            if (str_contains($normalized, $this->normalizeUsersSummarySearchText($label))) {
+                $tokens[] = $value;
+            }
+        }
+
+        return array_values(array_unique(array_filter($tokens, fn ($token) => mb_strlen($token) > 0)));
+    }
+
+    private function applyUsersSummaryTokenSearch($query, string $token): void
+    {
+        $like = '%' . $token . '%';
+        $digitToken = preg_replace('/\D+/', '', $token);
+
+        foreach (['name', 'email', 'address', 'referral_code', 'role', 'status'] as $column) {
+            $query->orWhereRaw($this->normalizedUsersSummaryColumnSql($column) . ' LIKE ?', [$like]);
+        }
+
+        $query->orWhere('phone', 'like', $like);
+
+        if ($digitToken !== '') {
+            $query->orWhereRaw(
+                "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '-', ''), '+', ''), '(', ''), ')', '') LIKE ?",
+                ['%' . $digitToken . '%']
+            );
+        }
+
+        if (ctype_digit($digitToken)) {
+            $query->orWhere('id', (int) $digitToken)
+                ->orWhereRaw('CAST(id AS CHAR) LIKE ?', ['%' . $digitToken . '%']);
+        }
+    }
+
+    private function normalizedUsersSummaryColumnSql(string $column): string
+    {
+        $sql = "LOWER(COALESCE($column, ''))";
+        foreach ([
+            'أ' => 'ا',
+            'إ' => 'ا',
+            'آ' => 'ا',
+            'ى' => 'ي',
+            'ة' => 'ه',
+            'ؤ' => 'و',
+            'ئ' => 'ي',
+        ] as $from => $to) {
+            $sql = "REPLACE($sql, '$from', '$to')";
+        }
+
+        return $sql;
+    }
+
+    private function normalizeUsersSummarySearchText(string $value): string
+    {
+        $value = mb_strtolower($this->normalizeUsersSummaryDigits($value));
+        $value = strtr($value, [
+            'أ' => 'ا',
+            'إ' => 'ا',
+            'آ' => 'ا',
+            'ى' => 'ي',
+            'ة' => 'ه',
+            'ؤ' => 'و',
+            'ئ' => 'ي',
+        ]);
+
+        return trim(preg_replace('/[^\p{L}\p{N}@._+\-]+/u', ' ', $value) ?? $value);
+    }
+
+    private function normalizeUsersSummaryDigits(string $value): string
+    {
+        return strtr($value, [
+            '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4',
+            '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
+            '۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4',
+            '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9',
         ]);
     }
 

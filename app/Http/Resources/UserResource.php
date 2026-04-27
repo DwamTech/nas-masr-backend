@@ -24,6 +24,7 @@ class UserResource extends JsonResource
             'phone' => $this->phone,
             'role'=>$this->role,
             'is_representative' => $this->is_representative ?? false,
+            'show_ad_update_button' => (bool) ($this->show_ad_update_button ?? true),
             'referral_code' => $this->referral_code??null,
             'country_code' => $this->country_code??null,
             'created_at' => $this->created_at?->format('Y-m-d H:i'),

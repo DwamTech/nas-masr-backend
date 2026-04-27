@@ -201,6 +201,7 @@ Route::prefix('admin')
             Route::post('users', [UserController::class, 'storeUser']);
             Route::delete('users/{user}', [UserController::class, 'deleteUser']);
             Route::patch('users/{user}/block', [UserController::class, 'blockedUser']);
+            Route::patch('users/{user}/ad-update-button', [UserController::class, 'toggleAdUpdateButton']);
             Route::get('/featured/{userId}', [BestAdvertiserController::class, 'show'])->whereNumber('userId');
             Route::post('/featured', [BestAdvertiserController::class, 'store']);
             Route::put('/disable/{bestAdvertiser}', [BestAdvertiserController::class, 'disable']);

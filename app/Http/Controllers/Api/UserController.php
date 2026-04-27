@@ -889,6 +889,26 @@ class UserController extends Controller
         ]);
     }
 
+    public function toggleAdUpdateButton(Request $request, User $user)
+    {
+        $this->ensureCanManageStaffAccounts($request, $user);
+
+        $data = $request->validate([
+            'show_ad_update_button' => ['required', 'boolean'],
+        ]);
+
+        $user->show_ad_update_button = (bool) $data['show_ad_update_button'];
+        $user->save();
+        $user->loadCount('listings');
+
+        return response()->json([
+            'message' => $user->show_ad_update_button
+                ? 'تم إظهار زر تحديث الإعلان للمستخدم.'
+                : 'تم إخفاء زر تحديث الإعلان عن المستخدم.',
+            'user' => $this->formatUserSummary($user),
+        ]);
+    }
+
     // Admin: Delete user
     public function deleteUser(Request $request, User $user)
     {
@@ -921,12 +941,14 @@ class UserController extends Controller
             'role' => $user->role ?? 'user',
             'allowed_dashboard_pages' => $user->dashboardPageKeys(),
             'profile_image_url' => $user->profile_image_url,
+            'show_ad_update_button' => (bool) ($user->show_ad_update_button ?? true),
         ];
     }
 
     private function profilePayload(User $user): array
     {
         $data = $user->toArray();
+        $data['show_ad_update_button'] = (bool) ($user->show_ad_update_button ?? true);
         $data['saved_locations'] = $this->savedLocationPayloads($user);
         $data['whatsapp_numbers_group'] = $this->normalizeWhatsappNumbersGroup(
             $user->whatsapp_numbers_group ?? []

@@ -46,6 +46,7 @@ class User extends Authenticatable
         'is_representative',
         'fcm_token',
         'guest_uuid',
+        'show_ad_update_button',
     ];
 
 
@@ -74,6 +75,7 @@ class User extends Authenticatable
             'is_representative' => 'boolean',
             'allowed_dashboard_pages' => 'array',
             'whatsapp_numbers_group' => 'array',
+            'show_ad_update_button' => 'boolean',
         ];
     }
 
